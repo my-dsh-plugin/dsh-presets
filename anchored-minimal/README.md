@@ -1,15 +1,15 @@
-# minimal-v3
+# anchored-minimal
 
 English | [中文](README.zh.md)
 
-Minimal V3 — the DSH official "minimal mode" (persistent bash + str_replace_editor) plus the common coding tools.
+Anchored Minimal — the DSH official "minimal mode" (persistent bash + str_replace_editor) plus the common coding tools.
 
 ## Overview
 
 - Inherits everything from the minimal mode: fixed complete persona (no runtime-context injection), persistent bash (isolated `terminals` realm), a bare local filesystem realm (`fs-local`), and no context compaction.
 - Adds the common tools: `read`/`write`/`edit` (tool-fs), `glob`/`grep` (tool-fs-search), and `pwsh` (the Windows bash substitute, disabled on non-Windows automatically).
 - `tool-fs` shares the same local fs realm (`isolate: { fs: true }`) with `str_replace_editor`, so both operate on the same bare local filesystem and require absolute paths.
-- **V4-Pro anchoring** (the core design point): DeepSeek V4 Pro conditions strongly on the API-visible first-request tool catalog — community Project2 evidence ([xiaobright/modeltest](https://github.com/xiaobright/modeltest), MIT) measured Minimal at 99/96 vs Standard at 91/92, with the first-request tool schema as the decisive variable. `bootstrap.mjs` therefore keeps the FIRST model request on the official Minimal tool pair (`bash` + `str_replace_editor`) and strips auto-injected context, then exposes the full minimal-v3 catalog after the first durable `tool/call` or `assistant/message`. The persona stays byte-identical to Minimal for the whole session.
+- **V4-Pro anchoring** (the core design point): DeepSeek V4 Pro conditions strongly on the API-visible first-request tool catalog — community Project2 evidence ([xiaobright/modeltest](https://github.com/xiaobright/modeltest), MIT) measured Minimal at 99/96 vs Standard at 91/92, with the first-request tool schema as the decisive variable. `bootstrap.mjs` therefore keeps the FIRST model request on the official Minimal tool pair (`bash` + `str_replace_editor`) and strips auto-injected context, then exposes the full anchored-minimal catalog after the first durable `tool/call` or `assistant/message`. The persona stays byte-identical to Minimal for the whole session.
 
 ## Why this preset exists
 
@@ -30,7 +30,7 @@ Three variables decide whether V4 Pro stays on the Minimal trajectory:
 2. **Persona must stay byte-identical.** The one-liner `You are a helpful software engineer assistant.` is part of the conditioning; rewording it broke the `We need` reasoning style in paraphrase runs. `complete: true` keeps it the whole system prompt.
 3. **No auto-injected context on the first request.** The available-skills reminder and the AGENTS.md/CLAUDE.md digest break the anchor (0/9 anchored with the skill catalog present vs ~81% without).
 
-So a preset that wants Minimal's capability but more tools faces a conflict: adding `read`/`write`/`edit`/`glob`/`grep` to the first request is exactly what pulls V4 Pro off the Minimal trajectory. **minimal-v3 resolves the conflict with two-phase tool anchoring.**
+So a preset that wants Minimal's capability but more tools faces a conflict: adding `read`/`write`/`edit`/`glob`/`grep` to the first request is exactly what pulls V4 Pro off the Minimal trajectory. **anchored-minimal resolves the conflict with two-phase tool anchoring.**
 
 ## How it works
 
@@ -39,7 +39,7 @@ So a preset that wants Minimal's capability but more tools faces a conflict: add
 - `system-prompt/assemble` — narrows the assembled tool catalog to the official Minimal pair (`bash` + `str_replace_editor`) while the session is unpromoted;
 - `agent/pre-step` — strips auto-injected context messages (`skill-catalog`, `agent-instructions` sources) during the same phase.
 
-Phase is derived from **durable session events**, not memory: the first `tool/call` OR `assistant/message` promotes the session, and the phase survives resume/reload by replay. After promotion the full minimal-v3 catalog is exposed and stays exposed — promotion is one-way and permanent.
+Phase is derived from **durable session events**, not memory: the first `tool/call` OR `assistant/message` promotes the session, and the phase survives resume/reload by replay. After promotion the full anchored-minimal catalog is exposed and stays exposed — promotion is one-way and permanent.
 
 | Phase | Tool catalog | Auto-injected context |
 |---|---|---|
@@ -69,13 +69,13 @@ The target host must run DeepSeek Harness (a version that ships the `@deepseek-a
 macOS / Linux:
 
 ```bash
-bash -c "$(curl -fsSL https://raw.githubusercontent.com/my-dsh-plugin/dsh-presets/main/minimal-v3/install-minimal-v3.sh)"
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/my-dsh-plugin/dsh-presets/main/anchored-minimal/install-anchored-minimal.sh)"
 ```
 
 Windows PowerShell:
 
 ```powershell
-irm https://raw.githubusercontent.com/my-dsh-plugin/dsh-presets/main/minimal-v3/install-minimal-v3.ps1 | iex
+irm https://raw.githubusercontent.com/my-dsh-plugin/dsh-presets/main/anchored-minimal/install-anchored-minimal.ps1 | iex
 ```
 
 Installer notes:
@@ -89,10 +89,10 @@ Installer notes:
 Validate through the roster after install:
 
 ```
-standingKeyFor('minimal-v3')
+standingKeyFor('anchored-minimal')
 ```
 
-Or start a new session and pick "极简V3". The FIRST model request sees only the Minimal tool pair (`bash` + `str_replace_editor`); after the first tool call or assistant reply the full catalog appears (`read`, `write`, `edit`, `glob`, `grep`, plus `pwsh` on Windows). Both snapshots are expected — the bootstrap phase is by design.
+Or start a new session and pick "锚定极简". The FIRST model request sees only the Minimal tool pair (`bash` + `str_replace_editor`); after the first tool call or assistant reply the full catalog appears (`read`, `write`, `edit`, `glob`, `grep`, plus `pwsh` on Windows). Both snapshots are expected — the bootstrap phase is by design.
 
 ## Known limitation: mid-session preset switching
 
@@ -100,7 +100,7 @@ The anchoring assumption is that a session **starts** on this preset. Do not swi
 
 Mid-session switching (for example an agent-mode switcher riding `agentPreset.select`, which re-links the agent to another preset's standing composition while the session keeps its history) breaks the anchor:
 
-- **Switching INTO minimal-v3 mid-session**: the session history already contains `tool/call` / `assistant/message` events, so `bootstrap.mjs` immediately treats the session as promoted and skips the bootstrap phase. The model then sees the full tool catalog with the Minimal persona but **without** the Minimal-grounded first-request trajectory — exactly the unanchored condition this preset exists to prevent. Model capability may degrade.
+- **Switching INTO anchored-minimal mid-session**: the session history already contains `tool/call` / `assistant/message` events, so `bootstrap.mjs` immediately treats the session as promoted and skips the bootstrap phase. The model then sees the full tool catalog with the Minimal persona but **without** the Minimal-grounded first-request trajectory — exactly the unanchored condition this preset exists to prevent. Model capability may degrade.
 - **Switching AWAY mid-session**: the anchored trajectory is abandoned for whatever the target preset conditions; the benefit is lost either way.
 
 Recommended usage: pick this preset when creating a session and keep it for the session's lifetime.
@@ -113,19 +113,19 @@ Recommended usage: pick this preset when creating a session and keep it for the 
 ## Files
 
 ```
-minimal-v3/
+anchored-minimal/
 ├── README.md                  # this file
 ├── README.zh.md               # 中文版
 ├── agent.cordis.yml           # composition
 ├── bootstrap.mjs              # V4-Pro anchoring plugin (first-request Minimal tool pair)
 ├── preset.yml                 # metadata
-├── install-minimal-v3.sh      # installer (macOS/Linux, self-contained)
-└── install-minimal-v3.ps1     # installer (Windows, self-contained, UTF-8 BOM)
+├── install-anchored-minimal.sh      # installer (macOS/Linux, self-contained)
+└── install-anchored-minimal.ps1     # installer (Windows, self-contained, UTF-8 BOM)
 ```
 
 ## Credits
 
-The V4-Pro anchoring design is based on the MIT-licensed [xiaobright/dsh-anchored-standard](https://github.com/xiaobright/dsh-anchored-standard) (first-request tool-schema anchoring), simplified for minimal-v3: one-way promotion, no discovery-tool resident set.
+The V4-Pro anchoring design is based on the MIT-licensed [xiaobright/dsh-anchored-standard](https://github.com/xiaobright/dsh-anchored-standard) (first-request tool-schema anchoring), simplified for anchored-minimal: one-way promotion, no discovery-tool resident set.
 
 ## License
 

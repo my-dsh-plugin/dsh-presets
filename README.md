@@ -8,7 +8,7 @@ A collection of agent preset modes for [DeepSeek Harness](https://github.com/dee
 
 | Preset | Tools | Docs |
 |---|---|---|
-| [minimal-v3](minimal-v3/README.md) | bash, str_replace_editor, read/write/edit, glob/grep, pwsh (Windows only) — V4-Pro anchored (first request on the Minimal tool pair) | [README](minimal-v3/README.md) |
+| [anchored-minimal](anchored-minimal/README.md) | bash, str_replace_editor, read/write/edit, glob/grep, pwsh (Windows only) — V4-Pro anchored (first request on the Minimal tool pair) | [README](anchored-minimal/README.md) |
 | [readonly-audit](readonly-audit/README.md) | read-only tool set + audit persona (bash/pwsh, read, glob/grep, str_replace_editor view, web_search) | [README](readonly-audit/README.md) |
 
 ## Layout
@@ -30,18 +30,18 @@ dsh-presets/
 
 The target host must run DeepSeek Harness (a version that ships the `@deepseek-ai/dsh-*` preset packages).
 
-### minimal-v3
+### anchored-minimal
 
 macOS / Linux:
 
 ```bash
-bash -c "$(curl -fsSL https://raw.githubusercontent.com/my-dsh-plugin/dsh-presets/main/minimal-v3/install-minimal-v3.sh)"
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/my-dsh-plugin/dsh-presets/main/anchored-minimal/install-anchored-minimal.sh)"
 ```
 
 Windows PowerShell:
 
 ```powershell
-irm https://raw.githubusercontent.com/my-dsh-plugin/dsh-presets/main/minimal-v3/install-minimal-v3.ps1 | iex
+irm https://raw.githubusercontent.com/my-dsh-plugin/dsh-presets/main/anchored-minimal/install-anchored-minimal.ps1 | iex
 ```
 
 ### readonly-audit

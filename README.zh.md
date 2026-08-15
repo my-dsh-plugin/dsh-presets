@@ -8,7 +8,7 @@
 
 | 预设 | 工具集 | 详细文档 |
 |---|---|---|
-| [极简V3 / minimal-v3](minimal-v3/README.zh.md) | bash、str_replace_editor、read/write/edit、glob/grep、pwsh（仅 Windows）—— V4 Pro 锚定（首请求极简工具对） | [README](minimal-v3/README.zh.md) |
+| [锚定极简 / anchored-minimal](anchored-minimal/README.zh.md) | bash、str_replace_editor、read/write/edit、glob/grep、pwsh（仅 Windows）—— V4 Pro 锚定（首请求极简工具对） | [README](anchored-minimal/README.zh.md) |
 | [只读安全审计 / readonly-audit](readonly-audit/README.zh.md) | 只读工具集 + 审计 persona（bash/pwsh、read、glob/grep、str_replace_editor view、web_search） | [README](readonly-audit/README.zh.md) |
 
 ## 目录结构
@@ -30,18 +30,18 @@ dsh-presets/
 
 目标机需安装 DeepSeek Harness（版本需带 `@deepseek-ai/dsh-*` 预设包）。
 
-### 极简V3 / minimal-v3
+### 锚定极简 / anchored-minimal
 
 macOS / Linux:
 
 ```bash
-bash -c "$(curl -fsSL https://raw.githubusercontent.com/my-dsh-plugin/dsh-presets/main/minimal-v3/install-minimal-v3.sh)"
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/my-dsh-plugin/dsh-presets/main/anchored-minimal/install-anchored-minimal.sh)"
 ```
 
 Windows PowerShell:
 
 ```powershell
-irm https://raw.githubusercontent.com/my-dsh-plugin/dsh-presets/main/minimal-v3/install-minimal-v3.ps1 | iex
+irm https://raw.githubusercontent.com/my-dsh-plugin/dsh-presets/main/anchored-minimal/install-anchored-minimal.ps1 | iex
 ```
 
 ### 只读安全审计 / readonly-audit

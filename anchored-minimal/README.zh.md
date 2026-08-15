@@ -1,4 +1,4 @@
-# minimal-v3（极简V3）
+# anchored-minimal（锚定极简）
 
 [English](README.md) | 中文
 
@@ -9,7 +9,7 @@
 - 继承极简模式的一切：固定完整 persona（无运行时上下文注入）、持久 bash（`terminals` 隔离 realm）、本地裸文件系统 realm（`fs-local`）、无上下文压缩。
 - 新增常用工具：`read`/`write`/`edit`（tool-fs）、`glob`/`grep`（tool-fs-search）、`pwsh`（Windows 下替代 bash，非 Windows 自动禁用）。
 - `tool-fs` 与 `str_replace_editor` 共用同一个本地 fs realm（`isolate: { fs: true }`），两者操作的是同一套裸本地文件系统，且均要求绝对路径。
-- **V4 Pro 锚定（核心设计点）**：DeepSeek V4 Pro 强依赖 API 可见的首请求工具目录——社区 Project2 实测（[xiaobright/modeltest](https://github.com/xiaobright/modeltest)，MIT）极简模式 99/96 vs 标准模式 91/92，首请求工具 schema 是决定性变量。`bootstrap.mjs` 让**第一个模型请求**只暴露官方极简工具对（`bash` + `str_replace_editor`）并剥离自动注入的上下文，在会话出现第一次持久的 `tool/call` 或 `assistant/message` 后，再暴露 minimal-v3 完整工具集；persona 全程与极简模式逐字节一致。
+- **V4 Pro 锚定（核心设计点）**：DeepSeek V4 Pro 强依赖 API 可见的首请求工具目录——社区 Project2 实测（[xiaobright/modeltest](https://github.com/xiaobright/modeltest)，MIT）极简模式 99/96 vs 标准模式 91/92，首请求工具 schema 是决定性变量。`bootstrap.mjs` 让**第一个模型请求**只暴露官方极简工具对（`bash` + `str_replace_editor`）并剥离自动注入的上下文，在会话出现第一次持久的 `tool/call` 或 `assistant/message` 后，再暴露 anchored-minimal 完整工具集；persona 全程与极简模式逐字节一致。
 
 ## 为什么要做这个模式
 
@@ -30,7 +30,7 @@ DSH 官方「极简模式」刻意保持极小：固定单行 persona、无自�
 2. **persona 必须逐字节一致**。单行 `You are a helpful software engineer assistant.` 本身是条件化的一部分；改写会让 `We need` 推理风格退化（改写实验均落入标准式）。`complete: true` 让它成为完整系统提示词。
 3. **首请求不能有自动注入上下文**。available-skills 提醒和 AGENTS.md/CLAUDE.md 摘要会破坏锚定（带 skill 目录时 0/9 锚定，去掉后约 81%）。
 
-因此，「想要极简模式的能力、又想要更多工具」的预设面临冲突：把 `read`/`write`/`edit`/`glob`/`grep` 放进首请求，恰恰会把 V4 Pro 拉离极简轨迹。**minimal-v3 用两阶段工具锚定解决这个冲突。**
+因此，「想要极简模式的能力、又想要更多工具」的预设面临冲突：把 `read`/`write`/`edit`/`glob`/`grep` 放进首请求，恰恰会把 V4 Pro 拉离极简轨迹。**anchored-minimal 用两阶段工具锚定解决这个冲突。**
 
 ## 原理
 
@@ -39,7 +39,7 @@ DSH 官方「极简模式」刻意保持极小：固定单行 persona、无自�
 - `system-prompt/assemble` —— 会话未提升时，把组装好的工具目录收窄为官方极简工具对（`bash` + `str_replace_editor`）；
 - `agent/pre-step` —— 同一阶段剥离自动注入的上下文消息（`skill-catalog`、`agent-instructions` 两种来源）。
 
-阶段从**持久会话事件**推导而非内存：第一次 `tool/call` **或** `assistant/message` 即提升会话，resume/reload 通过事件重放保持阶段。提升后完整 minimal-v3 工具集出现并保持——提升是单向、永久的。
+阶段从**持久会话事件**推导而非内存：第一次 `tool/call` **或** `assistant/message` 即提升会话，resume/reload 通过事件重放保持阶段。提升后完整 anchored-minimal 工具集出现并保持——提升是单向、永久的。
 
 | 阶段 | 工具目录 | 自动注入上下文 |
 |---|---|---|
@@ -69,13 +69,13 @@ persona（`complete: true`）全程不动，系统提示词与会话保持一致
 macOS / Linux:
 
 ```bash
-bash -c "$(curl -fsSL https://raw.githubusercontent.com/my-dsh-plugin/dsh-presets/main/minimal-v3/install-minimal-v3.sh)"
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/my-dsh-plugin/dsh-presets/main/anchored-minimal/install-anchored-minimal.sh)"
 ```
 
 Windows PowerShell:
 
 ```powershell
-irm https://raw.githubusercontent.com/my-dsh-plugin/dsh-presets/main/minimal-v3/install-minimal-v3.ps1 | iex
+irm https://raw.githubusercontent.com/my-dsh-plugin/dsh-presets/main/anchored-minimal/install-anchored-minimal.ps1 | iex
 ```
 
 安装脚本特性：
@@ -89,10 +89,10 @@ irm https://raw.githubusercontent.com/my-dsh-plugin/dsh-presets/main/minimal-v3/
 安装后通过 roster 挂载校验：
 
 ```
-standingKeyFor('minimal-v3')
+standingKeyFor('anchored-minimal')
 ```
 
-或直接新建会话选择「极简V3」。**第一个模型请求只看到极简工具对**（`bash` + `str_replace_editor`）；第一次工具调用或模型回复后完整工具集出现（`read`、`write`、`edit`、`glob`、`grep`，Windows 上另有 `pwsh`）。两个快照都是预期行为——引导阶段是设计使然。
+或直接新建会话选择「锚定极简」。**第一个模型请求只看到极简工具对**（`bash` + `str_replace_editor`）；第一次工具调用或模型回复后完整工具集出现（`read`、`write`、`edit`、`glob`、`grep`，Windows 上另有 `pwsh`）。两个快照都是预期行为——引导阶段是设计使然。
 
 ## 已知限制：会话中途切换模式
 
@@ -100,7 +100,7 @@ standingKeyFor('minimal-v3')
 
 会话中途切换（例如基于 `agentPreset.select` 的模式切换器，它在保留会话历史的同时把 agent 重链接到另一预设的常驻组合）会破坏锚定：
 
-- **中途切入 minimal-v3**：会话历史里已有 `tool/call` / `assistant/message` 事件，`bootstrap.mjs` 会立即将会话判定为已提升并跳过引导阶段。模型随后看到的是「完整工具集 + 极简 persona」，却没有极简模式打底的首请求轨迹——这正是本预设要避免的未锚定条件，模型能力可能因此退化。
+- **中途切入 anchored-minimal**：会话历史里已有 `tool/call` / `assistant/message` 事件，`bootstrap.mjs` 会立即将会话判定为已提升并跳过引导阶段。模型随后看到的是「完整工具集 + 极简 persona」，却没有极简模式打底的首请求轨迹——这正是本预设要避免的未锚定条件，模型能力可能因此退化。
 - **中途切出**：已建立的锚定轨迹被目标预设的条件覆盖，收益同样丧失。
 
 推荐用法：**创建会话时选择本预设，并在会话生命周期内保持不变**。
@@ -113,19 +113,19 @@ standingKeyFor('minimal-v3')
 ## 文件说明
 
 ```
-minimal-v3/
+anchored-minimal/
 ├── README.md                  # 英文版
 ├── README.zh.md               # 本文件
 ├── agent.cordis.yml           # 组合定义
 ├── bootstrap.mjs              # V4 Pro 锚定插件（首请求极简工具对）
 ├── preset.yml                 # 元数据
-├── install-minimal-v3.sh      # 安装码（macOS/Linux，自包含）
-└── install-minimal-v3.ps1     # 安装码（Windows，自包含，UTF-8 BOM）
+├── install-anchored-minimal.sh      # 安装码（macOS/Linux，自包含）
+└── install-anchored-minimal.ps1     # 安装码（Windows，自包含，UTF-8 BOM）
 ```
 
 ## 致谢
 
-V4 Pro 锚定设计基于 MIT 许可的 [xiaobright/dsh-anchored-standard](https://github.com/xiaobright/dsh-anchored-standard)（首请求工具 schema 锚定），为 minimal-v3 做了简化：单向提升、无发现工具常驻集。
+V4 Pro 锚定设计基于 MIT 许可的 [xiaobright/dsh-anchored-standard](https://github.com/xiaobright/dsh-anchored-standard)（首请求工具 schema 锚定），为 anchored-minimal 做了简化：单向提升、无发现工具常驻集。
 
 ## 许可
 

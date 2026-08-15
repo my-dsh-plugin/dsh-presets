@@ -1,5 +1,201 @@
+#!/usr/bin/env bash
+# install-anchored-minimal.sh - 锚定极简 agent preset install script (self-contained)
+#
+# Installs the "锚定极简" user preset (preset.yml + agent.cordis.yml + the
+# bootstrap.mjs V4-Pro anchoring plugin) into the DSH user preset root. The
+# target instance's roster discovers the preset immediately - no registration
+# or restart needed. Fully self-contained (content embedded), runnable from a
+# remote URL in one line.
+#
+# V4-PRO ANCHORING: DeepSeek V4 Pro conditions strongly on the API-visible
+# first-request tool catalog (community Project2 evidence: Minimal 99/96 vs
+# Standard 91/92; the first-request tool schema is the decisive variable).
+# This preset's bootstrap.mjs keeps the FIRST model request on the official
+# Minimal tool pair (bash + str_replace_editor), then exposes the full
+# anchored-minimal catalog after the first durable tool call or assistant message.
+#
+# ⚠️ KNOWN CONFLICT: the anchor assumes the session STARTS on this preset.
+# Do not switch into or out of it mid-conversation (e.g. via an agent-mode
+# switcher riding agentPreset.select) - mid-session history already contains
+# tool/call or assistant/message events, so the bootstrap phase is skipped and
+# the model sees the full catalog without the Minimal-grounded first-request
+# trajectory, which may degrade capability.
+#
+# Usage:
+#   bash install-anchored-minimal.sh             install to ${DSH_HOME:-$HOME/.dsh}/.agent-presets/anchored-minimal
+#   bash install-anchored-minimal.sh --force     overwrite existing install (backs up first)
+#   bash install-anchored-minimal.sh --check     print target path and status, write nothing
+#
+# Remote install:
+#   bash -c "$(curl -fsSL https://raw.githubusercontent.com/<owner>/<repo>/<branch>/anchored-minimal/install-anchored-minimal.sh)"
+#   # or
+#   curl -fsSL https://raw.githubusercontent.com/<owner>/<repo>/<branch>/anchored-minimal/install-anchored-minimal.sh | bash
+#
+# Notes:
+#   * The target DSH version must ship the @deepseek-ai/dsh-* packages this
+#     preset references (dsh-tool-fs / dsh-tool-fs-search / dsh-tool-pwsh /
+#     dsh-fs-local / dsh-terminal / dsh-tool-bash-persistent / dsh-persona).
+#   * After install, start a new session and pick "锚定极简", or validate via
+#     standingKeyFor('anchored-minimal').
+
+set -euo pipefail
+
+DSH_HOME="${DSH_HOME:-$HOME/.dsh}"
+TARGET_DIR="$DSH_HOME/.agent-presets/anchored-minimal"
+
+# ---- argument parsing ----
+FORCE=0
+CHECK=0
+for arg in "$@"; do
+  case "$arg" in
+    --force) FORCE=1 ;;
+    --check) CHECK=1 ;;
+    *) echo "unknown argument: $arg" >&2; exit 2 ;;
+  esac
+done
+
+echo "DSH_HOME:   $DSH_HOME"
+echo "Target dir: $TARGET_DIR"
+
+if [ "$CHECK" -eq 1 ]; then
+  if [ -e "$TARGET_DIR/agent.cordis.yml" ]; then
+    echo "status: already installed (use --force to overwrite)"
+    ls -la "$TARGET_DIR"
+  else
+    echo "status: not installed"
+  fi
+  exit 0
+fi
+
+if [ -e "$TARGET_DIR/agent.cordis.yml" ]; then
+  if [ "$FORCE" -ne 1 ]; then
+    echo "error: $TARGET_DIR already exists (use --force to overwrite)" >&2
+    exit 1
+  fi
+  BACKUP="$TARGET_DIR.bak-$(date +%Y%m%d%H%M%S)"
+  mv "$TARGET_DIR" "$BACKUP"
+  echo "backed up existing install to $BACKUP"
+fi
+
+mkdir -p "$TARGET_DIR"
+umask 077
+
+cat > "$TARGET_DIR/preset.yml" <<'PRESET_YML_EOF'
+name: 锚定极简
+description: 极简模式扩展：持久 bash、str_replace_editor、read/write/edit、glob/grep 与 pwsh（Windows）的编码 Agent。
+PRESET_YML_EOF
+
+cat > "$TARGET_DIR/agent.cordis.yml" <<'AGENT_CORDIS_YML_EOF'
+# The `anchored-minimal` agent preset: minimal plus the common coding tools.
+#
+# This preset is copied from `minimal`: the persona is the complete system
+# prompt, runtime context snapshots are suppressed, and context compaction is
+# absent. On top of persistent `bash` and `str_replace_editor` it adds the
+# common tool suite: `pwsh` (the Windows substitute for bash, disabled on
+# non-Windows), `read`/`write`/`edit` from `tool-fs`, and `glob`/`grep` from
+# `tool-fs-search`. `tool-fs` shares the bare local filesystem realm with
+# `str_replace_editor`, so both operate on the same un-sandboxed local fs.
+#
+# V4-PRO ANCHORING: DeepSeek V4 Pro conditions strongly on the API-visible
+# first-request tool catalog. Community Project2 evidence (xiaobright/modeltest,
+# MIT) measured Minimal at 99/96 vs Standard at 91/92, and the first-request
+# tool schema is the decisive variable. This preset therefore bootstraps the
+# FIRST model request on the official Minimal pair (`bash` +
+# `str_replace_editor`) via `bootstrap.mjs` (row must stay FIRST), then exposes
+# the full anchored-minimal catalog after the first durable `tool/call` or
+# `assistant/message`. The persona stays byte-identical to Minimal for the
+# whole session.
+
+# ── bootstrap (must stay FIRST) ─────────────────────────────────────────────
+#
+# This plugin publishes nothing: it only listens to the `system-prompt/assemble`
+# and `agent/pre-step` waterfalls, so it needs no realm and no inject list.
+# Being first in the file (and registering `prepend`) makes its filters the
+# outermost transforms, which is what lets it strip the bootstrap-phase
+# catalog and injected context even when later rows inject both.
+- id: tool-bootstrap
+  name: ./bootstrap.mjs
+  config:
+    bootstrapTools: [bash, str_replace_editor]
+    suppressedContextSources: [skill-catalog, agent-instructions]
+
+- id: persona
+  name: '@deepseek-ai/dsh-persona'
+  config:
+    text: You are a helpful software engineer assistant.
+    complete: true
+    includeRuntimeContext: false
+
+# The PTY registry is an agent-owned service, so it lives in an entry-local
+# realm. The backend still consumes the host sandbox policy and subprocess
+# implementation, while the tool registers into this agent's scoped catalog.
+- id: persistent-shell
+  name: cordis:group
+  group: true
+  isolate:
+    terminals: true
+  config:
+    - id: pty
+      name: '@deepseek-ai/dsh-terminal'
+
+    - id: terminal-bash
+      name: '@deepseek-ai/dsh-terminal-bash'
+      config:
+        timeoutMs: 300000
+
+    - id: persistent-bash
+      name: '@deepseek-ai/dsh-tool-bash-persistent'
+      config:
+        timeoutMs: 300000
+        description: |-
+          Run commands in a bash shell
+          * When invoking this tool, the contents of the "command" parameter does NOT need to be XML-escaped.
+          * You don't have access to the internet via this tool.
+          * You do have access to a mirror of common linux and python packages via apt and pip.
+          * State is persistent across command calls and discussions with the user.
+          * To inspect a particular line range of a file, e.g. lines 10-25, try 'sed -n 10,25p /path/to/the/file'.
+          * Please avoid commands that may produce a very large amount of output.
+          * Please run long lived commands in the background, e.g. 'sleep 10 &' or start a server in the background.
+
+# The bare local filesystem shadows the host's sandboxed provider only for this
+# preset. `tool-fs` (read/write/edit) sits inside the same realm so it shares
+# this exact filesystem with `str_replace_editor`; both require absolute paths.
+- id: filesystem
+  name: cordis:group
+  group: true
+  isolate:
+    fs: true
+  config:
+    - id: fs-local
+      name: '@deepseek-ai/dsh-fs-local'
+      config:
+        cwd: !!js process.env.DSH_CWD ?? process.cwd()
+
+    - id: tool-fs
+      name: '@deepseek-ai/dsh-tool-fs'
+
+    - id: str-replace-editor
+      name: '@deepseek-ai/dsh-tool-str-replace-editor'
+      config:
+        maxOutputChars: 16000
+
+# `glob`/`grep` register into the host `tools` registry and provide nothing,
+# so they need no realm; they resolve the host `subprocess` seam for ripgrep.
+- id: tool-fs-search
+  name: '@deepseek-ai/dsh-tool-fs-search'
+  config:
+    sampleOverCapGlobResults: false
+
+# `pwsh` mirrors `tool-bash` on Windows: it consumes the host `shell` registry
+# and is disabled on non-Windows platforms.
+- id: tool-pwsh
+  name: '@deepseek-ai/dsh-tool-pwsh'
+  disabled: !!js process.platform !== 'win32'
+AGENT_CORDIS_YML_EOF
+
+cat > "$TARGET_DIR/bootstrap.mjs" <<'BOOTSTRAP_MJS_EOF'
 /**
- * minimal-v3 anchored tool bootstrap
+ * anchored-minimal anchored tool bootstrap
  *
  * Keeps the FIRST model request on the official Minimal preset's REAL tool
  * pair (persistent `bash` + `str_replace_editor`) so DeepSeek V4 Pro anchors
@@ -8,7 +204,7 @@
  * variable, 5/5 anchored with the Minimal pair vs 11/11 standard-like with
  * any standard-family schema). After the first durable promotion signal — a
  * `tool/call` OR the first `assistant/message`, whichever comes first — the
- * full minimal-v3 catalog is exposed and stays exposed.
+ * full anchored-minimal catalog is exposed and stays exposed.
  *
  * The phase is derived from durable session events, so resume and reload
  * preserve it. The persona (`complete: true`) is untouched and stays
@@ -33,7 +229,7 @@
  * the session's lifetime. Do not switch into or out of it mid-conversation.
  *
  * Based on the MIT-licensed design of xiaobright/dsh-anchored-standard
- * (first-request tool-schema anchoring), simplified for minimal-v3: no
+ * (first-request tool-schema anchoring), simplified for anchored-minimal: no
  * discovery-tool resident set, no compaction epoch — promotion is one-way
  * and permanent per session.
  *
@@ -51,7 +247,7 @@
  */
 
 /** Cordis plugin name used by loader diagnostics. */
-export const name = 'minimal-v3-tool-bootstrap'
+export const name = 'anchored-minimal-tool-bootstrap'
 
 /**
  * Deliberately NO inject list: the listeners only touch services at event
@@ -204,3 +400,17 @@ export function apply(ctx, config) {
     }
   }, { prepend: true })
 }
+BOOTSTRAP_MJS_EOF
+
+echo "installed:"
+ls -la "$TARGET_DIR"
+
+cat <<'DONE'
+
+Next steps (on the target instance):
+  1. Start a NEW session and pick "锚定极简" (V4-Pro anchored);
+  2. The FIRST request sees the Minimal tool pair (bash + str_replace_editor);
+     after the first tool call or reply the full catalog appears
+     (read/write/edit, glob/grep, pwsh on Windows);
+  3. Keep the session on this preset - mid-session switching breaks the anchor.
+DONE

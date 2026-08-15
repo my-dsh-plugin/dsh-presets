@@ -1,6 +1,6 @@
-﻿# install-minimal-v3.ps1 - 极简V3 agent preset install script (PowerShell)
+﻿# install-anchored-minimal.ps1 - 锚定极简 agent preset install script (PowerShell)
 #
-# Installs the "极简V3" user preset (preset.yml + agent.cordis.yml + the
+# Installs the "锚定极简" user preset (preset.yml + agent.cordis.yml + the
 # bootstrap.mjs V4-Pro anchoring plugin) into the DSH user preset root. The
 # target instance's roster discovers the preset immediately - no registration
 # or restart needed. Fully self-contained (content embedded), runnable from a
@@ -11,7 +11,7 @@
 # Standard 91/92; the first-request tool schema is the decisive variable).
 # This preset's bootstrap.mjs keeps the FIRST model request on the official
 # Minimal tool pair (bash + str_replace_editor), then exposes the full
-# minimal-v3 catalog after the first durable tool call or assistant message.
+# anchored-minimal catalog after the first durable tool call or assistant message.
 #
 # ⚠️ KNOWN CONFLICT: the anchor assumes the session STARTS on this preset.
 # Do not switch into or out of it mid-conversation (e.g. via an agent-mode
@@ -21,12 +21,12 @@
 # trajectory, which may degrade capability.
 #
 # Usage:
-#   powershell -ExecutionPolicy Bypass -File install-minimal-v3.ps1
-#   powershell -ExecutionPolicy Bypass -File install-minimal-v3.ps1 -Force
-#   powershell -ExecutionPolicy Bypass -File install-minimal-v3.ps1 -Check
+#   powershell -ExecutionPolicy Bypass -File install-anchored-minimal.ps1
+#   powershell -ExecutionPolicy Bypass -File install-anchored-minimal.ps1 -Force
+#   powershell -ExecutionPolicy Bypass -File install-anchored-minimal.ps1 -Check
 #
 # Remote install:
-#   irm https://raw.githubusercontent.com/<owner>/<repo>/<branch>/minimal-v3/install-minimal-v3.ps1 | iex
+#   irm https://raw.githubusercontent.com/<owner>/<repo>/<branch>/anchored-minimal/install-anchored-minimal.ps1 | iex
 
 [CmdletBinding()]
 param(
@@ -38,15 +38,15 @@ $ErrorActionPreference = 'Stop'
 
 $DSH_HOME = if ($env:DSH_HOME) { $env:DSH_HOME } else { Join-Path $HOME '.dsh' }
 $PresetRoot = Join-Path $DSH_HOME '.agent-presets'
-$TargetDir = Join-Path $PresetRoot 'minimal-v3'
+$TargetDir = Join-Path $PresetRoot 'anchored-minimal'
 
 $PresetYml = @'
-name: 极简V3
+name: 锚定极简
 description: 极简模式扩展：持久 bash、str_replace_editor、read/write/edit、glob/grep 与 pwsh（Windows）的编码 Agent。
 '@
 
 $AgentCordisYml = @'
-# The `minimal-v3` agent preset: minimal plus the common coding tools.
+# The `anchored-minimal` agent preset: minimal plus the common coding tools.
 #
 # This preset is copied from `minimal`: the persona is the complete system
 # prompt, runtime context snapshots are suppressed, and context compaction is
@@ -62,7 +62,7 @@ $AgentCordisYml = @'
 # tool schema is the decisive variable. This preset therefore bootstraps the
 # FIRST model request on the official Minimal pair (`bash` +
 # `str_replace_editor`) via `bootstrap.mjs` (row must stay FIRST), then exposes
-# the full minimal-v3 catalog after the first durable `tool/call` or
+# the full anchored-minimal catalog after the first durable `tool/call` or
 # `assistant/message`. The persona stays byte-identical to Minimal for the
 # whole session.
 
@@ -155,7 +155,7 @@ $AgentCordisYml = @'
 
 $BootstrapMjs = @'
 /**
- * minimal-v3 anchored tool bootstrap
+ * anchored-minimal anchored tool bootstrap
  *
  * Keeps the FIRST model request on the official Minimal preset's REAL tool
  * pair (persistent `bash` + `str_replace_editor`) so DeepSeek V4 Pro anchors
@@ -164,7 +164,7 @@ $BootstrapMjs = @'
  * variable, 5/5 anchored with the Minimal pair vs 11/11 standard-like with
  * any standard-family schema). After the first durable promotion signal — a
  * `tool/call` OR the first `assistant/message`, whichever comes first — the
- * full minimal-v3 catalog is exposed and stays exposed.
+ * full anchored-minimal catalog is exposed and stays exposed.
  *
  * The phase is derived from durable session events, so resume and reload
  * preserve it. The persona (`complete: true`) is untouched and stays
@@ -189,7 +189,7 @@ $BootstrapMjs = @'
  * the session's lifetime. Do not switch into or out of it mid-conversation.
  *
  * Based on the MIT-licensed design of xiaobright/dsh-anchored-standard
- * (first-request tool-schema anchoring), simplified for minimal-v3: no
+ * (first-request tool-schema anchoring), simplified for anchored-minimal: no
  * discovery-tool resident set, no compaction epoch — promotion is one-way
  * and permanent per session.
  *
@@ -207,7 +207,7 @@ $BootstrapMjs = @'
  */
 
 /** Cordis plugin name used by loader diagnostics. */
-export const name = 'minimal-v3-tool-bootstrap'
+export const name = 'anchored-minimal-tool-bootstrap'
 
 /**
  * Deliberately NO inject list: the listeners only touch services at event
@@ -406,7 +406,7 @@ Get-ChildItem -Force $TargetDir | Format-Table -AutoSize
 Write-Host @'
 
 Next steps (on the target instance):
-  1. Start a NEW session and pick "极简V3" (V4-Pro anchored);
+  1. Start a NEW session and pick "锚定极简" (V4-Pro anchored);
   2. The FIRST request sees the Minimal tool pair (bash + str_replace_editor);
      after the first tool call or reply the full catalog appears
      (read/write/edit, glob/grep, pwsh on Windows);

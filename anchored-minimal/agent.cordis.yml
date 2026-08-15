@@ -1,4 +1,4 @@
-# The `minimal-v3` agent preset: minimal plus the common coding tools.
+# The `anchored-minimal` agent preset: minimal plus the common coding tools.
 #
 # This preset is copied from `minimal`: the persona is the complete system
 # prompt, runtime context snapshots are suppressed, and context compaction is
@@ -14,7 +14,7 @@
 # tool schema is the decisive variable. This preset therefore bootstraps the
 # FIRST model request on the official Minimal pair (`bash` +
 # `str_replace_editor`) via `bootstrap.mjs` (row must stay FIRST), then exposes
-# the full minimal-v3 catalog after the first durable `tool/call` or
+# the full anchored-minimal catalog after the first durable `tool/call` or
 # `assistant/message`. The persona stays byte-identical to Minimal for the
 # whole session.
 
