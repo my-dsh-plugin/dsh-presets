@@ -11,6 +11,47 @@
 - `tool-fs` 与 `str_replace_editor` 共用同一个本地 fs realm（`isolate: { fs: true }`），两者操作的是同一套裸本地文件系统，且均要求绝对路径。
 - **V4 Pro 锚定（核心设计点）**：DeepSeek V4 Pro 强依赖 API 可见的首请求工具目录——社区 Project2 实测（[xiaobright/modeltest](https://github.com/xiaobright/modeltest)，MIT）极简模式 99/96 vs 标准模式 91/92，首请求工具 schema 是决定性变量。`bootstrap.mjs` 让**第一个模型请求**只暴露官方极简工具对（`bash` + `str_replace_editor`）并剥离自动注入的上下文，在会话出现第一次持久的 `tool/call` 或 `assistant/message` 后，再暴露 minimal-v3 完整工具集；persona 全程与极简模式逐字节一致。
 
+## 为什么要做这个模式
+
+DSH 官方「极简模式」刻意保持极小：固定单行 persona、无自动注入的工作区/skill 上下文、无运行时上下文快照、只有两个工具（`bash` + `str_replace_editor`）。这种极简不是口味问题——它恰好匹配 DeepSeek V4 Pro 训练时的条件，模型在更"丰富"的标准族预设下表现实测更差。
+
+社区实测（[xiaobright/modeltest](https://github.com/xiaobright/modeltest)，Project2，DeepSeek V4 Pro，`reasoningEffort=max`，MIT）：
+
+| 预设 | Ability（run1/run2） | `let me` 计数 | 首请求工具目录 |
+|---|---:|---:|---|
+| Standard | 91 | 208 | 25 个工具 |
+| PTC | 92 | 194 | `run_code` |
+| **Minimal** | **99 / 96** | **0 / 0** | 2 个工具 |
+| Anchored Standard | **98 / 99** | 1 / 0 | 2 个工具，随后全量 |
+
+决定 V4 Pro 是否保持在极简轨迹上的三个变量：
+
+1. **首请求工具目录（决定性）**。**第一个模型请求**的 API 可见工具 schema 决定轨迹：极简工具对 5/5 次锚定、零 `let me` 首行；任何标准族 schema（pwsh/read、pwsh only、sandboxed bash/read）11/11 落入标准式行为。输出预算在 1024 时也有影响，但极简 schema 在适配器默认值（256000）下无需上限即可锚定。
+2. **persona 必须逐字节一致**。单行 `You are a helpful software engineer assistant.` 本身是条件化的一部分；改写会让 `We need` 推理风格退化（改写实验均落入标准式）。`complete: true` 让它成为完整系统提示词。
+3. **首请求不能有自动注入上下文**。available-skills 提醒和 AGENTS.md/CLAUDE.md 摘要会破坏锚定（带 skill 目录时 0/9 锚定，去掉后约 81%）。
+
+因此，「想要极简模式的能力、又想要更多工具」的预设面临冲突：把 `read`/`write`/`edit`/`glob`/`grep` 放进首请求，恰恰会把 V4 Pro 拉离极简轨迹。**minimal-v3 用两阶段工具锚定解决这个冲突。**
+
+## 原理
+
+`bootstrap.mjs`（本预设相对极简模式唯一的增量）挂接两个瀑布：
+
+- `system-prompt/assemble` —— 会话未提升时，把组装好的工具目录收窄为官方极简工具对（`bash` + `str_replace_editor`）；
+- `agent/pre-step` —— 同一阶段剥离自动注入的上下文消息（`skill-catalog`、`agent-instructions` 两种来源）。
+
+阶段从**持久会话事件**推导而非内存：第一次 `tool/call` **或** `assistant/message` 即提升会话，resume/reload 通过事件重放保持阶段。提升后完整 minimal-v3 工具集出现并保持——提升是单向、永久的。
+
+| 阶段 | 工具目录 | 自动注入上下文 |
+|---|---|---|
+| 请求 #1（引导） | `bash`、`str_replace_editor`（与极简完全一致） | 已剥离 |
+| 第一次工具调用/回复后 | 完整：`bash`、`str_replace_editor`、`read`、`write`、`edit`、`glob`、`grep`、`pwsh`（Windows） | 正常 |
+
+persona（`complete: true`）全程不动，系统提示词与会话保持一致、与极简模式逐字节相同；只有工具目录分阶段变化。
+
+健壮性：提升决策按会话记忆化；子代理始终全量；引导工具缺失时降级为完整目录并一次性告警，绝不抛错卡死；上下文过滤器失败时降级为"全部保留"——过滤器 bug 不会饿死或卡死会话。
+
+本预设是对社区模式的复现，不是普适结论：该基准只是单一工作负载上的个人评测。在信任锚定效果前，请在自己的任务上实测。
+
 ## 工具清单
 
 | 工具 | 来源 | 说明 |
