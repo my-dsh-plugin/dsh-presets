@@ -1,28 +1,28 @@
-# minimal-v3（极简V3）
+# minimal-v3
 
-中文：极简模式 V3 —— 在 DSH 官方「极简模式」（持久 bash + str_replace_editor）基础上，补充常用编码工具的预设。
+English | [中文](README.zh.md)
 
-English: Minimal V3 — the DSH official "minimal mode" (persistent bash + str_replace_editor) plus the common coding tools.
+Minimal V3 — the DSH official "minimal mode" (persistent bash + str_replace_editor) plus the common coding tools.
 
-## 简介 / Overview
+## Overview
 
-- 继承极简模式的一切：固定完整 persona（无运行时上下文注入）、持久 bash（`terminals` 隔离 realm）、本地裸文件系统 realm（`fs-local`）、无上下文压缩。
-- 新增常用工具：`read`/`write`/`edit`（tool-fs）、`glob`/`grep`（tool-fs-search）、`pwsh`（Windows 下替代 bash，非 Windows 自动禁用）。
-- `tool-fs` 与 `str_replace_editor` 共用同一个本地 fs realm（`isolate: { fs: true }`），两者操作的是同一套裸本地文件系统，且均要求绝对路径。
+- Inherits everything from the minimal mode: fixed complete persona (no runtime-context injection), persistent bash (isolated `terminals` realm), a bare local filesystem realm (`fs-local`), and no context compaction.
+- Adds the common tools: `read`/`write`/`edit` (tool-fs), `glob`/`grep` (tool-fs-search), and `pwsh` (the Windows bash substitute, disabled on non-Windows automatically).
+- `tool-fs` shares the same local fs realm (`isolate: { fs: true }`) with `str_replace_editor`, so both operate on the same bare local filesystem and require absolute paths.
 
-## 工具清单 / Tools
+## Tools
 
-| 工具 / Tool | 来源 / Source | 说明 / Notes |
+| Tool | Source | Notes |
 |---|---|---|
-| `bash`（持久） | `dsh-tool-bash-persistent` | 极简原有；会话内状态持久，300s 超时 |
-| `str_replace_editor` | `dsh-tool-str-replace-editor` | 极简原有；`view` 只读，`create`/`str_replace`/`insert` 走本地 fs |
-| `read` / `write` / `edit` | `dsh-tool-fs` | 与 str_replace_editor 共用同一 fs realm |
-| `glob` / `grep` | `dsh-tool-fs-search` | `sampleOverCapGlobResults: false`（超量结果按修改时间截断，不做跨顶层抽样） |
-| `pwsh` | `dsh-tool-pwsh` | 仅 Windows 启用（`disabled: !!js process.platform !== 'win32'`） |
+| `bash` (persistent) | `dsh-tool-bash-persistent` | from minimal; state persists across calls, 300s timeout |
+| `str_replace_editor` | `dsh-tool-str-replace-editor` | from minimal; `view` is read-only, `create`/`str_replace`/`insert` go through the local fs |
+| `read` / `write` / `edit` | `dsh-tool-fs` | shares the same fs realm as str_replace_editor |
+| `glob` / `grep` | `dsh-tool-fs-search` | `sampleOverCapGlobResults: false` (over-cap results truncate by mtime, no cross-top-level sampling) |
+| `pwsh` | `dsh-tool-pwsh` | Windows only (`disabled: !!js process.platform !== 'win32'`) |
 
-## 安装 / Install
+## Install
 
-目标机需安装 DeepSeek Harness（版本需带 `@deepseek-ai/dsh-*` 预设包，与来源机版本相当）。
+The target host must run DeepSeek Harness (a version that ships the `@deepseek-ai/dsh-*` preset packages, roughly matching the source machine).
 
 macOS / Linux:
 
@@ -36,37 +36,39 @@ Windows PowerShell:
 irm https://raw.githubusercontent.com/my-dsh-plugin/dsh-presets/main/minimal-v3/install-minimal-v3.ps1 | iex
 ```
 
-安装脚本特性：
+Installer notes:
 
-- 自动识别 `DSH_HOME` 环境变量，未设置时回退 `~/.dsh`；先运行 `--check` / `-Check` 可查看目标路径。
-- 默认拒绝覆盖已存在安装；`--force` / `-Force` 覆盖前先备份到 `.bak-<时间戳>`。
-- 脚本完全自包含（内容内嵌），可远程一行执行。
+- Honors the `DSH_HOME` environment variable, falls back to `~/.dsh` when unset; run `--check` / `-Check` first to see the target path.
+- Refuses to overwrite an existing install by default; `--force` / `-Force` backs it up to `.bak-<timestamp>` first.
+- Fully self-contained (content embedded), runnable from a remote URL in one line.
 
-## 校验 / Validation
+## Validation
 
-安装后通过 roster 挂载校验：
+Validate through the roster after install:
 
 ```
 standingKeyFor('minimal-v3')
 ```
 
-或直接新建会话选择「极简V3」，确认工具清单中出现 `bash`、`str_replace_editor`、`read`、`write`、`edit`、`glob`、`grep`（Windows 目标机额外有 `pwsh`）。
+Or start a new session and pick "极简V3"; confirm the tool list shows `bash`, `str_replace_editor`, `read`, `write`, `edit`, `glob`, `grep` (plus `pwsh` on Windows targets).
 
-## 版本兼容 / Compatibility
+## Compatibility
 
-- 预设行引用 `@deepseek-ai/dsh-*` 包（`dsh-tool-fs`、`dsh-tool-fs-search`、`dsh-tool-pwsh`、`dsh-fs-local`、`dsh-terminal*`、`dsh-tool-bash-persistent`、`dsh-persona`），均随部署提供，无需额外安装。
-- 若目标机 DSH 版本较新，先对比其自带的 shipped `minimal/agent.cordis.yml`；行 id / 配置键有变化时，把新增的三行移植到目标机自己的 minimal 副本上再装。
+- The preset rows reference `@deepseek-ai/dsh-*` packages (`dsh-tool-fs`, `dsh-tool-fs-search`, `dsh-tool-pwsh`, `dsh-fs-local`, `dsh-terminal*`, `dsh-tool-bash-persistent`, `dsh-persona`), all shipped with the deployment — no extra installs needed.
+- If the target DSH version is newer, compare its shipped `minimal/agent.cordis.yml` first; if row ids / config keys changed, port the three added rows onto the target's own minimal copy before installing.
 
-## 文件说明 / Files
+## Files
 
 ```
 minimal-v3/
-├── agent.cordis.yml              # 组合定义（预设本体）
-├── preset.yml                    # 元数据（名称、描述）
-├── install-minimal-v3.sh         # macOS/Linux 安装码（自包含）
-└── install-minimal-v3.ps1        # Windows 安装码（自包含，UTF-8 BOM）
+├── README.md                  # this file
+├── README.zh.md               # 中文版
+├── agent.cordis.yml           # composition
+├── preset.yml                 # metadata
+├── install-minimal-v3.sh      # installer (macOS/Linux, self-contained)
+└── install-minimal-v3.ps1     # installer (Windows, self-contained, UTF-8 BOM)
 ```
 
-## 许可 / License
+## License
 
 MIT
