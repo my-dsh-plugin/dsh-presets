@@ -15,6 +15,23 @@
  * byte-identical to the official Minimal preset; this plugin only narrows
  * the tool catalog and strips auto-injected context during bootstrap.
  *
+ * ⚠️ KNOWN CONFLICT — mid-session preset switching:
+ * The anchoring assumption is that a session STARTS on this preset. If the
+ * session is recomposed onto this preset MID-CONVERSATION (for example via
+ * an agent-mode switcher riding `agentPreset.select`, which re-links the
+ * agent to another preset's standing composition while the session keeps its
+ * history), the durable history already contains `tool/call` /
+ * `assistant/message` events, so this plugin immediately treats the session
+ * as promoted and the bootstrap phase is skipped. The model then sees the
+ * full tool catalog with the Minimal persona but WITHOUT the Minimal-grounded
+ * first-request trajectory — exactly the unanchored condition the bootstrap
+ * exists to prevent, and model capability may degrade as a result. Switching
+ * AWAY from this preset mid-session is equally unsupported: the anchored
+ * trajectory is abandoned for whatever the target preset conditions.
+ *
+ * Recommendation: pick this preset when CREATING a session and keep it for
+ * the session's lifetime. Do not switch into or out of it mid-conversation.
+ *
  * Based on the MIT-licensed design of xiaobright/dsh-anchored-standard
  * (first-request tool-schema anchoring), simplified for minimal-v3: no
  * discovery-tool resident set, no compaction epoch — promotion is one-way

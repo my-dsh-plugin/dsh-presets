@@ -94,6 +94,17 @@ standingKeyFor('minimal-v3')
 
 Or start a new session and pick "极简V3". The FIRST model request sees only the Minimal tool pair (`bash` + `str_replace_editor`); after the first tool call or assistant reply the full catalog appears (`read`, `write`, `edit`, `glob`, `grep`, plus `pwsh` on Windows). Both snapshots are expected — the bootstrap phase is by design.
 
+## Known limitation: mid-session preset switching
+
+The anchoring assumption is that a session **starts** on this preset. Do not switch into or out of it mid-conversation.
+
+Mid-session switching (for example an agent-mode switcher riding `agentPreset.select`, which re-links the agent to another preset's standing composition while the session keeps its history) breaks the anchor:
+
+- **Switching INTO minimal-v3 mid-session**: the session history already contains `tool/call` / `assistant/message` events, so `bootstrap.mjs` immediately treats the session as promoted and skips the bootstrap phase. The model then sees the full tool catalog with the Minimal persona but **without** the Minimal-grounded first-request trajectory — exactly the unanchored condition this preset exists to prevent. Model capability may degrade.
+- **Switching AWAY mid-session**: the anchored trajectory is abandoned for whatever the target preset conditions; the benefit is lost either way.
+
+Recommended usage: pick this preset when creating a session and keep it for the session's lifetime.
+
 ## Compatibility
 
 - The preset rows reference `@deepseek-ai/dsh-*` packages (`dsh-tool-fs`, `dsh-tool-fs-search`, `dsh-tool-pwsh`, `dsh-fs-local`, `dsh-terminal*`, `dsh-tool-bash-persistent`, `dsh-persona`), all shipped with the deployment — no extra installs needed.

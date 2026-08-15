@@ -94,6 +94,17 @@ standingKeyFor('minimal-v3')
 
 或直接新建会话选择「极简V3」。**第一个模型请求只看到极简工具对**（`bash` + `str_replace_editor`）；第一次工具调用或模型回复后完整工具集出现（`read`、`write`、`edit`、`glob`、`grep`，Windows 上另有 `pwsh`）。两个快照都是预期行为——引导阶段是设计使然。
 
+## 已知限制：会话中途切换模式
+
+锚定的前提是会话**从本预设开始**。请勿在对话中途切入或切出本预设。
+
+会话中途切换（例如基于 `agentPreset.select` 的模式切换器，它在保留会话历史的同时把 agent 重链接到另一预设的常驻组合）会破坏锚定：
+
+- **中途切入 minimal-v3**：会话历史里已有 `tool/call` / `assistant/message` 事件，`bootstrap.mjs` 会立即将会话判定为已提升并跳过引导阶段。模型随后看到的是「完整工具集 + 极简 persona」，却没有极简模式打底的首请求轨迹——这正是本预设要避免的未锚定条件，模型能力可能因此退化。
+- **中途切出**：已建立的锚定轨迹被目标预设的条件覆盖，收益同样丧失。
+
+推荐用法：**创建会话时选择本预设，并在会话生命周期内保持不变**。
+
 ## 版本兼容
 
 - 预设行引用 `@deepseek-ai/dsh-*` 包（`dsh-tool-fs`、`dsh-tool-fs-search`、`dsh-tool-pwsh`、`dsh-fs-local`、`dsh-terminal*`、`dsh-tool-bash-persistent`、`dsh-persona`），均随部署提供，无需额外安装。

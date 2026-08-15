@@ -14,6 +14,13 @@
 # Minimal tool pair (bash + str_replace_editor), then exposes the full
 # minimal-v3 catalog after the first durable tool call or assistant message.
 #
+# ⚠️ KNOWN CONFLICT: the anchor assumes the session STARTS on this preset.
+# Do not switch into or out of it mid-conversation (e.g. via an agent-mode
+# switcher riding agentPreset.select) - mid-session history already contains
+# tool/call or assistant/message events, so the bootstrap phase is skipped and
+# the model sees the full catalog without the Minimal-grounded first-request
+# trajectory, which may degrade capability.
+#
 # Usage:
 #   bash install-minimal-v3.sh             install to ${DSH_HOME:-$HOME/.dsh}/.agent-presets/minimal-v3
 #   bash install-minimal-v3.sh --force     overwrite existing install (backs up first)
@@ -204,6 +211,23 @@ cat > "$TARGET_DIR/bootstrap.mjs" <<'BOOTSTRAP_MJS_EOF'
  * byte-identical to the official Minimal preset; this plugin only narrows
  * the tool catalog and strips auto-injected context during bootstrap.
  *
+ * ⚠️ KNOWN CONFLICT — mid-session preset switching:
+ * The anchoring assumption is that a session STARTS on this preset. If the
+ * session is recomposed onto this preset MID-CONVERSATION (for example via
+ * an agent-mode switcher riding `agentPreset.select`, which re-links the
+ * agent to another preset's standing composition while the session keeps its
+ * history), the durable history already contains `tool/call` /
+ * `assistant/message` events, so this plugin immediately treats the session
+ * as promoted and the bootstrap phase is skipped. The model then sees the
+ * full tool catalog with the Minimal persona but WITHOUT the Minimal-grounded
+ * first-request trajectory — exactly the unanchored condition the bootstrap
+ * exists to prevent, and model capability may degrade as a result. Switching
+ * AWAY from this preset mid-session is equally unsupported: the anchored
+ * trajectory is abandoned for whatever the target preset conditions.
+ *
+ * Recommendation: pick this preset when CREATING a session and keep it for
+ * the session's lifetime. Do not switch into or out of it mid-conversation.
+ *
  * Based on the MIT-licensed design of xiaobright/dsh-anchored-standard
  * (first-request tool-schema anchoring), simplified for minimal-v3: no
  * discovery-tool resident set, no compaction epoch — promotion is one-way
@@ -384,9 +408,9 @@ ls -la "$TARGET_DIR"
 cat <<'DONE'
 
 Next steps (on the target instance):
-  1. Start a new session and pick "极简V3" (V4-Pro anchored);
+  1. Start a NEW session and pick "极简V3" (V4-Pro anchored);
   2. The FIRST request sees the Minimal tool pair (bash + str_replace_editor);
      after the first tool call or reply the full catalog appears
      (read/write/edit, glob/grep, pwsh on Windows);
-  3. Or validate via the roster: standingKeyFor('minimal-v3').
+  3. Keep the session on this preset - mid-session switching breaks the anchor.
 DONE
