@@ -1,6 +1,13 @@
 MIT License
 
 Copyright (c) 2026 suninx
+Portions Copyright (c) 2026 DeepSeek
+
+The agent presets in this repository are derived from the official
+DeepSeek Harness preset compositions (MIT License, Copyright (c) 2026
+DeepSeek), and the anchored tool-bootstrap design in `anchored-minimal/`
+follows the MIT-licensed xiaobright/dsh-anchored-standard (Copyright (c)
+2026 xiaobright, Portions Copyright (c) 2026 DeepSeek).
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
