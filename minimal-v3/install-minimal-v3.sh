@@ -1,26 +1,35 @@
 #!/usr/bin/env bash
-# install-minimal-v3.sh — 极简V3 agent preset 安装码（自包含，可远程调用）
+# install-minimal-v3.sh - 极简V3 agent preset install script (self-contained)
 #
-# 把「极简V3」用户预设（agent.cordis.yml + preset.yml）安装到本机 DSH 的
-# 用户预设根。安装后目标实例的 roster 即可发现该预设，无需注册或重启。
-# 脚本内容完全内嵌，不依赖仓库里的其他文件，因此可以直接从远端管道执行。
+# Installs the "极简V3" user preset (preset.yml + agent.cordis.yml + the
+# bootstrap.mjs V4-Pro anchoring plugin) into the DSH user preset root. The
+# target instance's roster discovers the preset immediately - no registration
+# or restart needed. Fully self-contained (content embedded), runnable from a
+# remote URL in one line.
 #
-# 用法：
-#   bash install-minimal-v3.sh            安装到 ${DSH_HOME:-$HOME/.dsh}/.agent-presets/minimal-v3
-#   bash install-minimal-v3.sh --force    覆盖已存在的安装（先备份到 .bak-<时间戳>）
-#   bash install-minimal-v3.sh --check    仅打印目标路径和现状，不写入
+# V4-PRO ANCHORING: DeepSeek V4 Pro conditions strongly on the API-visible
+# first-request tool catalog (community Project2 evidence: Minimal 99/96 vs
+# Standard 91/92; the first-request tool schema is the decisive variable).
+# This preset's bootstrap.mjs keeps the FIRST model request on the official
+# Minimal tool pair (bash + str_replace_editor), then exposes the full
+# minimal-v3 catalog after the first durable tool call or assistant message.
 #
-# 远程安装（把本文件放进任意开源仓库后，一行命令）：
-#   bash -c "$(curl -fsSL https://raw.githubusercontent.com/<owner>/<repo>/<branch>/install-minimal-v3.sh)"
-#   # 或
-#   curl -fsSL https://raw.githubusercontent.com/<owner>/<repo>/<branch>/install-minimal-v3.sh | bash
+# Usage:
+#   bash install-minimal-v3.sh             install to ${DSH_HOME:-$HOME/.dsh}/.agent-presets/minimal-v3
+#   bash install-minimal-v3.sh --force     overwrite existing install (backs up first)
+#   bash install-minimal-v3.sh --check     print target path and status, write nothing
 #
-# 注意：
-#   * 目标实例的 DSH 版本必须带本预设引用的 @deepseek-ai/dsh-* 包
-#     （dsh-tool-fs / dsh-tool-fs-search / dsh-tool-pwsh / dsh-fs-local /
-#     dsh-terminal / dsh-tool-bash-persistent / dsh-persona 等，均随部署提供）；
-#   * 安装后请在目标实例新建会话选择「极简V3」确认工具清单，
-#     或通过 roster 的 standingKeyFor('minimal-v3') 做挂载校验。
+# Remote install:
+#   bash -c "$(curl -fsSL https://raw.githubusercontent.com/<owner>/<repo>/<branch>/minimal-v3/install-minimal-v3.sh)"
+#   # or
+#   curl -fsSL https://raw.githubusercontent.com/<owner>/<repo>/<branch>/minimal-v3/install-minimal-v3.sh | bash
+#
+# Notes:
+#   * The target DSH version must ship the @deepseek-ai/dsh-* packages this
+#     preset references (dsh-tool-fs / dsh-tool-fs-search / dsh-tool-pwsh /
+#     dsh-fs-local / dsh-terminal / dsh-tool-bash-persistent / dsh-persona).
+#   * After install, start a new session and pick "极简V3", or validate via
+#     standingKeyFor('minimal-v3').
 
 set -euo pipefail
 
@@ -79,6 +88,29 @@ cat > "$TARGET_DIR/agent.cordis.yml" <<'AGENT_CORDIS_YML_EOF'
 # non-Windows), `read`/`write`/`edit` from `tool-fs`, and `glob`/`grep` from
 # `tool-fs-search`. `tool-fs` shares the bare local filesystem realm with
 # `str_replace_editor`, so both operate on the same un-sandboxed local fs.
+#
+# V4-PRO ANCHORING: DeepSeek V4 Pro conditions strongly on the API-visible
+# first-request tool catalog. Community Project2 evidence (xiaobright/modeltest,
+# MIT) measured Minimal at 99/96 vs Standard at 91/92, and the first-request
+# tool schema is the decisive variable. This preset therefore bootstraps the
+# FIRST model request on the official Minimal pair (`bash` +
+# `str_replace_editor`) via `bootstrap.mjs` (row must stay FIRST), then exposes
+# the full minimal-v3 catalog after the first durable `tool/call` or
+# `assistant/message`. The persona stays byte-identical to Minimal for the
+# whole session.
+
+# ── bootstrap (must stay FIRST) ─────────────────────────────────────────────
+#
+# This plugin publishes nothing: it only listens to the `system-prompt/assemble`
+# and `agent/pre-step` waterfalls, so it needs no realm and no inject list.
+# Being first in the file (and registering `prepend`) makes its filters the
+# outermost transforms, which is what lets it strip the bootstrap-phase
+# catalog and injected context even when later rows inject both.
+- id: tool-bootstrap
+  name: ./bootstrap.mjs
+  config:
+    bootstrapTools: [bash, str_replace_editor]
+    suppressedContextSources: [skill-catalog, agent-instructions]
 
 - id: persona
   name: '@deepseek-ai/dsh-persona'
@@ -154,16 +186,207 @@ cat > "$TARGET_DIR/agent.cordis.yml" <<'AGENT_CORDIS_YML_EOF'
   disabled: !!js process.platform !== 'win32'
 AGENT_CORDIS_YML_EOF
 
+cat > "$TARGET_DIR/bootstrap.mjs" <<'BOOTSTRAP_MJS_EOF'
+/**
+ * minimal-v3 anchored tool bootstrap
+ *
+ * Keeps the FIRST model request on the official Minimal preset's REAL tool
+ * pair (persistent `bash` + `str_replace_editor`) so DeepSeek V4 Pro anchors
+ * on the Minimal trajectory (community Project2 evidence: Minimal 99/96 vs
+ * Standard 91/92; the API-visible first-request tool catalog is the decisive
+ * variable, 5/5 anchored with the Minimal pair vs 11/11 standard-like with
+ * any standard-family schema). After the first durable promotion signal — a
+ * `tool/call` OR the first `assistant/message`, whichever comes first — the
+ * full minimal-v3 catalog is exposed and stays exposed.
+ *
+ * The phase is derived from durable session events, so resume and reload
+ * preserve it. The persona (`complete: true`) is untouched and stays
+ * byte-identical to the official Minimal preset; this plugin only narrows
+ * the tool catalog and strips auto-injected context during bootstrap.
+ *
+ * Based on the MIT-licensed design of xiaobright/dsh-anchored-standard
+ * (first-request tool-schema anchoring), simplified for minimal-v3: no
+ * discovery-tool resident set, no compaction epoch — promotion is one-way
+ * and permanent per session.
+ *
+ * Robustness:
+ *  - Promotion decisions are memoized per session id for this process; the
+ *    durable event scan runs once per session per process, then O(1).
+ *  - Subagents (delegationDepth > 0) are always promoted (full catalog).
+ *  - A missing bootstrap tool degrades to the full catalog with a one-time
+ *    warning instead of throwing, so composition drift can never brick a
+ *    session.
+ *  - The pre-step context filter degrades to "keep everything" on failure:
+ *    a filter bug must never eat the user's context.
+ *  - Invalid config fails at apply time (preset mount), where it is visible
+ *    and fixable.
+ */
+
+/** Cordis plugin name used by loader diagnostics. */
+export const name = 'minimal-v3-tool-bootstrap'
+
+/**
+ * Deliberately NO inject list: the listeners only touch services at event
+ * time. Applying without an inject — combined with this row being FIRST in
+ * agent.cordis.yml — registers the plugin before any context-injecting row,
+ * and waterfall after-next transforms apply in reverse registration order, so
+ * the first-request strip below is the LAST transform. The pre-step listener
+ * additionally registers with `prepend: true` so the strip stays the outermost
+ * transform even against host-plane listeners and future row reordering.
+ */
+export const inject = []
+
+/** Durable session event types that count as a promotion signal. */
+const PROMOTE_EVENTS = new Set(['tool/call', 'assistant/message'])
+
+/** Every config key this plugin accepts — anything else is a typo. */
+const ALLOWED_KEYS = new Set(['bootstrapTools', 'suppressedContextSources'])
+
+/**
+ * Context sources stripped from the first request by default. Both are
+ * automatic `agent/pre-step` injections: the available-skills reminder
+ * (`skill-catalog`) and the AGENTS.md/CLAUDE.md workspace digest
+ * (`agent-instructions`). True Minimal mounts neither plugin.
+ */
+const DEFAULT_SUPPRESSED_SOURCES = ['skill-catalog', 'agent-instructions']
+
+/**
+ * The default first-request catalog: the OFFICIAL Minimal preset's exact tool
+ * pair — the persistent `bash` shell and `str_replace_editor`.
+ */
+const DEFAULT_BOOTSTRAP_TOOLS = ['bash', 'str_replace_editor']
+
+function stringList(value, field) {
+  if (!Array.isArray(value) || value.length === 0 || value.some((item) => typeof item !== 'string' || item.length === 0)) {
+    throw new TypeError(`${name}: ${field} must be a non-empty array of non-empty strings`)
+  }
+  return [...new Set(value)]
+}
+
+function sourceList(value, field, fallback) {
+  if (value === undefined) return new Set(fallback)
+  if (!Array.isArray(value) || value.some((item) => typeof item !== 'string' || item.length === 0)) {
+    throw new TypeError(`${name}: ${field} must be an array of non-empty strings`)
+  }
+  return new Set(value)
+}
+
+/** Register the per-session bootstrap filter. */
+export function apply(ctx, config) {
+  const source = config === undefined ? {} : config
+  if (typeof source !== 'object' || source === null || Array.isArray(source)) {
+    throw new TypeError(`${name}: config must be an object`)
+  }
+  const unknown = Object.keys(source).filter((key) => !ALLOWED_KEYS.has(key))
+  if (unknown.length > 0) {
+    throw new TypeError(`${name}: unknown config key(s) ${unknown.join(', ')} — allowed keys: ${[...ALLOWED_KEYS].sort().join(', ')}`)
+  }
+  const bootstrapTools = stringList(source.bootstrapTools, 'bootstrapTools')
+  const suppressedSources = sourceList(source.suppressedContextSources, 'suppressedContextSources', DEFAULT_SUPPRESSED_SOURCES)
+
+  /**
+   * Per-session promotion state, memoized per process. `0` = unpromoted,
+   * `1` = promoted. Derived from durable session events so resume/reload
+   * preserve the phase without catch-up machinery.
+   */
+  const promotedFor = new Map()
+  const isPromoted = (session) => {
+    if (session === undefined) return true
+    const cached = promotedFor.get(session.id)
+    if (cached !== undefined) return cached
+    let promoted = false
+    if (Array.isArray(session.events)) {
+      for (const event of session.events) {
+        if (PROMOTE_EVENTS.has(event.type)) {
+          promoted = true
+          break
+        }
+      }
+    }
+    promotedFor.set(session.id, promoted)
+    return promoted
+  }
+
+  let warned = false
+  const warnOnce = (message) => {
+    if (warned) return
+    warned = true
+    try {
+      ctx.logger.warn(message)
+    } catch {
+      // Logger unavailable — the guard exists only to avoid spamming.
+    }
+  }
+
+  /**
+   * Narrow the assembled catalog to the bootstrap pair. When a bootstrap tool
+   * is missing from the assembled catalog, degrade to the full catalog with a
+   * one-time warning instead of throwing.
+   */
+  const keepBootstrapTools = (assembled) => {
+    const available = new Set(assembled.tools.map((tool) => tool.name))
+    const missing = bootstrapTools.filter((toolName) => !available.has(toolName))
+    if (missing.length > 0) {
+      warnOnce(
+        `${name}: expected bootstrap tools ${JSON.stringify(missing)} are missing from the assembled catalog — `
+        + 'bootstrap disabled, full catalog exposed',
+      )
+      return assembled
+    }
+    return {
+      ...assembled,
+      tools: assembled.tools.filter((tool) => bootstrapTools.includes(tool.name)),
+    }
+  }
+
+  ctx.on('system-prompt/assemble', async (_assembly, context, next) => {
+    // Downstream errors propagate untouched; only this filter's own logic is guarded.
+    const assembled = await next()
+    try {
+      if (isPromoted(context.agent?.session)) return assembled
+      return keepBootstrapTools(assembled)
+    } catch (error) {
+      // A filter bug must never brick a session: degrade to the full catalog.
+      warnOnce(`${name}: bootstrap filter failed, exposing the full catalog: ${String((error && error.message) || error)}`)
+      return assembled
+    }
+  })
+
+  // Strip first-step injected reminders (skill catalog, AGENTS.md) during
+  // bootstrap. Because this listener is the first registered (see the inject
+  // note, the row order in agent.cordis.yml, and `prepend` below), the strip
+  // is the final waterfall transform and actually removes what later
+  // listeners inject.
+  ctx.on('agent/pre-step', async ({ agent }, next) => {
+    // Downstream errors propagate untouched; only this filter's own logic is guarded.
+    const decision = await next()
+    if (decision.kind === 'reject') return decision
+    try {
+      if (isPromoted(agent?.session) || suppressedSources.size === 0) return decision
+      if (!Array.isArray(decision.messages)) return decision
+      const kept = decision.messages.filter((message) => {
+        const kind = message?.source?.kind
+        return typeof kind !== 'string' || !suppressedSources.has(kind)
+      })
+      return kept.length === decision.messages.length ? decision : { ...decision, messages: kept }
+    } catch (error) {
+      // A filter bug must never eat context: degrade to keeping every message.
+      warnOnce(`${name}: pre-step context filter failed, keeping injected context: ${String((error && error.message) || error)}`)
+      return decision
+    }
+  }, { prepend: true })
+}
+BOOTSTRAP_MJS_EOF
+
 echo "installed:"
 ls -la "$TARGET_DIR"
 
 cat <<'DONE'
 
-下一步（在目标实例上）：
-  1. 新建会话并选择「极简V3」，确认工具清单：
-     bash / str_replace_editor / read / write / edit / glob / grep
-     （Windows 目标机还会出现 pwsh）
-  2. 或通过 roster 校验：standingKeyFor('minimal-v3')
-  3. 若校验失败，先对比目标实例 shipped minimal 的版本，
-     把三行新增移植到目标机自己的 minimal 副本上再试。
+Next steps (on the target instance):
+  1. Start a new session and pick "极简V3" (V4-Pro anchored);
+  2. The FIRST request sees the Minimal tool pair (bash + str_replace_editor);
+     after the first tool call or reply the full catalog appears
+     (read/write/edit, glob/grep, pwsh on Windows);
+  3. Or validate via the roster: standingKeyFor('minimal-v3').
 DONE

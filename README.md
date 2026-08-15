@@ -8,7 +8,7 @@ A collection of agent preset modes for [DeepSeek Harness](https://github.com/dee
 
 | Preset | Tools | Docs |
 |---|---|---|
-| [minimal-v3](minimal-v3/README.md) | bash, str_replace_editor, read/write/edit, glob/grep, pwsh (Windows only) | [README](minimal-v3/README.md) |
+| [minimal-v3](minimal-v3/README.md) | bash, str_replace_editor, read/write/edit, glob/grep, pwsh (Windows only) — V4-Pro anchored (first request on the Minimal tool pair) | [README](minimal-v3/README.md) |
 | [readonly-audit](readonly-audit/README.md) | read-only tool set + audit persona (bash/pwsh, read, glob/grep, str_replace_editor view, web_search) | [README](readonly-audit/README.md) |
 
 ## Layout

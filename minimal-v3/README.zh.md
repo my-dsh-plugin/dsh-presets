@@ -9,6 +9,7 @@
 - 继承极简模式的一切：固定完整 persona（无运行时上下文注入）、持久 bash（`terminals` 隔离 realm）、本地裸文件系统 realm（`fs-local`）、无上下文压缩。
 - 新增常用工具：`read`/`write`/`edit`（tool-fs）、`glob`/`grep`（tool-fs-search）、`pwsh`（Windows 下替代 bash，非 Windows 自动禁用）。
 - `tool-fs` 与 `str_replace_editor` 共用同一个本地 fs realm（`isolate: { fs: true }`），两者操作的是同一套裸本地文件系统，且均要求绝对路径。
+- **V4 Pro 锚定（核心设计点）**：DeepSeek V4 Pro 强依赖 API 可见的首请求工具目录——社区 Project2 实测（[xiaobright/modeltest](https://github.com/xiaobright/modeltest)，MIT）极简模式 99/96 vs 标准模式 91/92，首请求工具 schema 是决定性变量。`bootstrap.mjs` 让**第一个模型请求**只暴露官方极简工具对（`bash` + `str_replace_editor`）并剥离自动注入的上下文，在会话出现第一次持久的 `tool/call` 或 `assistant/message` 后，再暴露 minimal-v3 完整工具集；persona 全程与极简模式逐字节一致。
 
 ## 工具清单
 
@@ -50,7 +51,7 @@ irm https://raw.githubusercontent.com/my-dsh-plugin/dsh-presets/main/minimal-v3/
 standingKeyFor('minimal-v3')
 ```
 
-或直接新建会话选择「极简V3」，确认工具清单中出现 `bash`、`str_replace_editor`、`read`、`write`、`edit`、`glob`、`grep`（Windows 目标机额外有 `pwsh`）。
+或直接新建会话选择「极简V3」。**第一个模型请求只看到极简工具对**（`bash` + `str_replace_editor`）；第一次工具调用或模型回复后完整工具集出现（`read`、`write`、`edit`、`glob`、`grep`，Windows 上另有 `pwsh`）。两个快照都是预期行为——引导阶段是设计使然。
 
 ## 版本兼容
 
@@ -64,10 +65,15 @@ minimal-v3/
 ├── README.md                  # 英文版
 ├── README.zh.md               # 本文件
 ├── agent.cordis.yml           # 组合定义
+├── bootstrap.mjs              # V4 Pro 锚定插件（首请求极简工具对）
 ├── preset.yml                 # 元数据
 ├── install-minimal-v3.sh      # 安装码（macOS/Linux，自包含）
 └── install-minimal-v3.ps1     # 安装码（Windows，自包含，UTF-8 BOM）
 ```
+
+## 致谢
+
+V4 Pro 锚定设计基于 MIT 许可的 [xiaobright/dsh-anchored-standard](https://github.com/xiaobright/dsh-anchored-standard)（首请求工具 schema 锚定），为 minimal-v3 做了简化：单向提升、无发现工具常驻集。
 
 ## 许可
 

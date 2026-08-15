@@ -7,6 +7,29 @@
 # non-Windows), `read`/`write`/`edit` from `tool-fs`, and `glob`/`grep` from
 # `tool-fs-search`. `tool-fs` shares the bare local filesystem realm with
 # `str_replace_editor`, so both operate on the same un-sandboxed local fs.
+#
+# V4-PRO ANCHORING: DeepSeek V4 Pro conditions strongly on the API-visible
+# first-request tool catalog. Community Project2 evidence (xiaobright/modeltest,
+# MIT) measured Minimal at 99/96 vs Standard at 91/92, and the first-request
+# tool schema is the decisive variable. This preset therefore bootstraps the
+# FIRST model request on the official Minimal pair (`bash` +
+# `str_replace_editor`) via `bootstrap.mjs` (row must stay FIRST), then exposes
+# the full minimal-v3 catalog after the first durable `tool/call` or
+# `assistant/message`. The persona stays byte-identical to Minimal for the
+# whole session.
+
+# ── bootstrap (must stay FIRST) ─────────────────────────────────────────────
+#
+# This plugin publishes nothing: it only listens to the `system-prompt/assemble`
+# and `agent/pre-step` waterfalls, so it needs no realm and no inject list.
+# Being first in the file (and registering `prepend`) makes its filters the
+# outermost transforms, which is what lets it strip the bootstrap-phase
+# catalog and injected context even when later rows inject both.
+- id: tool-bootstrap
+  name: ./bootstrap.mjs
+  config:
+    bootstrapTools: [bash, str_replace_editor]
+    suppressedContextSources: [skill-catalog, agent-instructions]
 
 - id: persona
   name: '@deepseek-ai/dsh-persona'

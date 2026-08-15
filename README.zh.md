@@ -8,7 +8,7 @@
 
 | 预设 | 工具集 | 详细文档 |
 |---|---|---|
-| [极简V3 / minimal-v3](minimal-v3/README.zh.md) | bash、str_replace_editor、read/write/edit、glob/grep、pwsh（仅 Windows） | [README](minimal-v3/README.zh.md) |
+| [极简V3 / minimal-v3](minimal-v3/README.zh.md) | bash、str_replace_editor、read/write/edit、glob/grep、pwsh（仅 Windows）—— V4 Pro 锚定（首请求极简工具对） | [README](minimal-v3/README.zh.md) |
 | [只读安全审计 / readonly-audit](readonly-audit/README.zh.md) | 只读工具集 + 审计 persona（bash/pwsh、read、glob/grep、str_replace_editor view、web_search） | [README](readonly-audit/README.zh.md) |
 
 ## 目录结构
