@@ -1,15 +1,28 @@
 # dsh-presets
 
-中文：DeepSeek Harness (DSH) 的 Agent 预设模式合集。每个预设是一对 `agent.cordis.yml` + `preset.yml`，附跨平台安装脚本（macOS/Linux 用 bash，Windows 用 PowerShell），一行命令即可安装到任意主机，安装后目标实例的 roster 立即发现该预设。
+中文：DeepSeek Harness (DSH) 的 Agent 预设模式合集。每个预设是一个目录：`agent.cordis.yml` + `preset.yml`，附跨平台安装脚本（macOS/Linux 用 bash，Windows 用 PowerShell），一行命令即可安装到任意主机，安装后目标实例的 roster 立即发现该预设。
 
-English: A collection of agent preset modes for DeepSeek Harness (DSH). Each preset is an `agent.cordis.yml` + `preset.yml` pair with a cross-platform installer (bash for macOS/Linux, PowerShell for Windows) — one command installs it on any host, and the target instance's roster discovers the preset immediately.
+English: A collection of agent preset modes for DeepSeek Harness (DSH). Each preset is a directory with `agent.cordis.yml` + `preset.yml` plus a cross-platform installer (bash for macOS/Linux, PowerShell for Windows) — one command installs it on any host, and the target instance's roster discovers the preset immediately.
 
 ## 预设列表 / Presets
 
-| 预设 / Preset | 工具集 / Tools | 安装 / Install |
+| 预设 / Preset | 工具集 / Tools | 详细文档 / Docs |
 |---|---|---|
-| 极简V3 / minimal-v3 | bash、str_replace_editor、read/write/edit、glob/grep、pwsh（仅 Windows） | 见下 / see below |
-| 只读安全审计 / readonly-audit | 只读工具集 + 审计 persona（bash/pwsh、read、glob/grep、str_replace_editor view、web_search） | 见下 / see below |
+| [极简V3 / minimal-v3](minimal-v3/README.md) | bash、str_replace_editor、read/write/edit、glob/grep、pwsh（仅 Windows） | [README](minimal-v3/README.md) |
+| [只读安全审计 / readonly-audit](readonly-audit/README.md) | 只读工具集 + 审计 persona（bash/pwsh、read、glob/grep、str_replace_editor view、web_search） | [README](readonly-audit/README.md) |
+
+## 目录结构 / Layout
+
+```
+dsh-presets/
+├── README.md                  # 本文件 / this file
+└── <preset-id>/
+    ├── README.md              # 该预设的详细文档 / detailed docs
+    ├── agent.cordis.yml       # 组合定义 / composition
+    ├── preset.yml             # 元数据 / metadata
+    ├── install-<id>.sh        # macOS/Linux 安装码 / installer
+    └── install-<id>.ps1       # Windows 安装码 / installer (UTF-8 BOM)
+```
 
 ## 安装 / Install
 
@@ -31,14 +44,6 @@ Windows PowerShell:
 irm https://raw.githubusercontent.com/my-dsh-plugin/dsh-presets/main/minimal-v3/install-minimal-v3.ps1 | iex
 ```
 
-安装脚本会自动识别 `DSH_HOME` 环境变量，未设置时回退到默认的 `~/.dsh`。不确定时先运行 `--check` / `-Check` 查看目标路径。
-
-The installer honors the `DSH_HOME` environment variable and falls back to `~/.dsh` when unset. Run with `--check` / `-Check` first to see the target path.
-
-安装完成后：新建会话选择「极简V3」确认工具清单，或通过 roster 的 `standingKeyFor('minimal-v3')` 做挂载校验。
-
-After install: start a new session and pick "极简V3" to confirm the tool list, or validate via the roster's `standingKeyFor('minimal-v3')`.
-
 ### readonly-audit（只读安全审计）
 
 macOS / Linux:
@@ -53,9 +58,14 @@ Windows PowerShell:
 irm https://raw.githubusercontent.com/my-dsh-plugin/dsh-presets/main/readonly-audit/install-readonly-audit.ps1 | iex
 ```
 
-纯预设版：不依赖任何自定义插件。只读强制由部署的 read-only 沙箱承担（宿主 `sandbox-policy` 默认模式需为 `read-only`，或会话切换到 read-only）；本预设只提供只读工具集、审计 persona 与报告交付提示。报告文件写入走宿主原生逐次批准升级。
+## 安装脚本通用说明 / Installer notes
 
-Pure-preset edition: no custom plugin. The read-only enforcement is carried by the deployment's read-only sandbox (the host `sandbox-policy` default must be `read-only`, or the session must be switched to read-only); this preset only provides the read-capable tool set, the audit persona, and report-delivery guidance. Report-file writes go through the host's native per-call approval escalation.
+- 自动识别 `DSH_HOME` 环境变量，未设置时回退默认 `~/.dsh`；先运行 `--check` / `-Check` 查看目标路径。
+- 默认拒绝覆盖已存在安装；`--force` / `-Force` 覆盖前先备份到 `.bak-<时间戳>`。
+- 脚本完全自包含（内容内嵌），可远程一行执行。
+- 每个预设的详细说明（工具清单、前提条件、使用流程、版本兼容）见其目录内 README。
+
+The installers honor the `DSH_HOME` environment variable and fall back to `~/.dsh` when unset. Run with `--check` / `-Check` first to see the target path. By default they refuse to overwrite an existing install; `--force` / `-Force` backs it up to `.bak-<timestamp>` first. Installers are fully self-contained (content embedded) so they can run from a remote URL in one line. See each preset's own README for tools, prerequisites, workflow, and version compatibility.
 
 ## 新增预设 / Adding a preset
 
@@ -65,14 +75,19 @@ Each preset lives in its own directory with:
 
 ```
 <preset-id>/
-├── agent.cordis.yml     # 组合定义 / composition
-├── preset.yml           # 元数据 / metadata
-└── install-minimal-v3.* # 自包含安装脚本 / self-contained installer
+├── README.md               # 详细文档（中英双语）/ detailed docs (bilingual)
+├── agent.cordis.yml        # 组合定义 / composition
+├── preset.yml              # 元数据 / metadata
+├── install-<id>.sh         # macOS/Linux 安装码 / installer
+└── install-<id>.ps1        # Windows 安装码 / installer
 ```
 
-安装脚本必须完全自包含（内容内嵌），才能从远程一行执行。
+- 安装脚本必须完全自包含（内容内嵌），才能从远程一行执行。
+- ps1 文件需带 UTF-8 BOM（Windows PowerShell 5.1 正确解析中文的前提）。
+- 安装脚本内嵌的预设内容必须与目录内 `agent.cordis.yml` / `preset.yml` 保持逐字节一致（可用脚本提取对比验证）。
+- 新增预设后：根 README 的预设列表、目录结构示例同步更新。
 
-Installers must be fully self-contained (content embedded) so they can run from a remote URL in one line.
+Installers must be fully self-contained (content embedded) so they can run from a remote URL in one line. The ps1 files need a UTF-8 BOM so Windows PowerShell 5.1 parses Chinese correctly. The embedded preset content in each installer must stay byte-identical with the `agent.cordis.yml` / `preset.yml` beside it. Keep the root README's preset table and layout example in sync when adding a preset.
 
 ## 许可 / License
 
