@@ -9,6 +9,7 @@ English: A collection of agent preset modes for DeepSeek Harness (DSH). Each pre
 | 预设 / Preset | 工具集 / Tools | 安装 / Install |
 |---|---|---|
 | 极简V3 / minimal-v3 | bash、str_replace_editor、read/write/edit、glob/grep、pwsh（仅 Windows） | 见下 / see below |
+| 只读安全审计 / readonly-audit | 只读工具集 + 审计 persona（bash/pwsh、read、glob/grep、str_replace_editor view、web_search） | 见下 / see below |
 
 ## 安装 / Install
 
@@ -37,6 +38,24 @@ The installer honors the `DSH_HOME` environment variable and falls back to `~/.d
 安装完成后：新建会话选择「极简V3」确认工具清单，或通过 roster 的 `standingKeyFor('minimal-v3')` 做挂载校验。
 
 After install: start a new session and pick "极简V3" to confirm the tool list, or validate via the roster's `standingKeyFor('minimal-v3')`.
+
+### readonly-audit（只读安全审计）
+
+macOS / Linux:
+
+```bash
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/my-dsh-plugin/dsh-presets/main/readonly-audit/install-readonly-audit.sh)"
+```
+
+Windows PowerShell:
+
+```powershell
+irm https://raw.githubusercontent.com/my-dsh-plugin/dsh-presets/main/readonly-audit/install-readonly-audit.ps1 | iex
+```
+
+纯预设版：不依赖任何自定义插件。只读强制由部署的 read-only 沙箱承担（宿主 `sandbox-policy` 默认模式需为 `read-only`，或会话切换到 read-only）；本预设只提供只读工具集、审计 persona 与报告交付提示。报告文件写入走宿主原生逐次批准升级。
+
+Pure-preset edition: no custom plugin. The read-only enforcement is carried by the deployment's read-only sandbox (the host `sandbox-policy` default must be `read-only`, or the session must be switched to read-only); this preset only provides the read-capable tool set, the audit persona, and report-delivery guidance. Report-file writes go through the host's native per-call approval escalation.
 
 ## 新增预设 / Adding a preset
 

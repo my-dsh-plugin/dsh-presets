@@ -1,0 +1,2 @@
+name: 只读安全审计
+description: 只读安全审计模式（纯预设版）：只读工具集 + 审计 persona；文件写入依赖部署的 read-only 沙箱与宿主逐次批准。

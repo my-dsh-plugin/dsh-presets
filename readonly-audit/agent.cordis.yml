@@ -1,0 +1,82 @@
+# The `readonly-audit` agent preset: a read-only security audit mode.
+#
+# Pure-preset edition: no custom plugin. The enforcement owner is the
+# deployment's read-only sandbox (the host `sandbox-policy` default must be
+# `read-only`, or the session must be switched to read-only); this preset only
+# contributes the read-capable tool set, the audit persona, and the delivery
+# guidance. Report-file writes go through the host's native per-call approval
+# escalation (write denied under read-only -> sandbox_permissions + approval
+# for exactly that call).
+
+# ── identity ────────────────────────────────────────────────────────────────
+
+- id: persona
+  name: '@deepseek-ai/dsh-persona'
+  config:
+    text: >-
+      You are a security audit agent powered by the {{model}} model. Your working directory is {{cwd}}.
+      Read and analyze source code, dependency manifests, and configuration files to find
+      vulnerabilities, dangerous APIs, weak configuration, hard-coded secrets, and supply-chain risks.
+      This deployment runs this preset under a read-only file sandbox: the system denies every file
+      mutation (write, edit, str_replace insert/create, and shell commands that write) unless the
+      user explicitly approves a single escalation for that exact call. Rely on that enforcement;
+      do not attempt to bypass it. Before starting the audit, ask the user how they want to receive
+      the final report: directly in the conversation, or written to a report file (that single write
+      requires their approval). Do not write intermediate notes or artifacts to disk.
+
+- id: agent-instructions
+  name: '@deepseek-ai/dsh-agent-instructions'
+  config:
+    maxBytes: 65536
+
+# ── shell ───────────────────────────────────────────────────────────────────
+
+# The executors stay in the host plane; the host's read-only sandbox policy
+# confines these tools' file effects. Background execution is disabled so no
+# detached process can outlive the session's policy.
+- id: tool-bash
+  name: '@deepseek-ai/dsh-tool-bash'
+  disabled: !!js process.platform === 'win32'
+  config:
+    enableRunInBackground: false
+
+- id: tool-pwsh
+  name: '@deepseek-ai/dsh-tool-pwsh'
+  disabled: !!js process.platform !== 'win32'
+  config:
+    enableRunInBackground: false
+
+# ── filesystem reads (plus the approved report-file write) ──────────────────
+
+# `tool-fs` registers `read`, `read_image`, `write`, and `edit`. Under the
+# deployment's read-only sandbox the host denies `write`/`edit` unless the
+# user approves that exact call (the report-file exception).
+- id: tool-fs
+  name: '@deepseek-ai/dsh-tool-fs'
+
+- id: tool-fs-search
+  name: '@deepseek-ai/dsh-tool-fs-search'
+  config:
+    sampleOverCapGlobResults: false
+
+# `view` is allowed read-only; `create`/`str_replace`/`insert` are denied by
+# the read-only sandbox like `write`/`edit`.
+- id: tool-str-replace-editor
+  name: '@deepseek-ai/dsh-tool-str-replace-editor'
+  config:
+    maxOutputChars: 16000
+
+# ── questions and web reads ─────────────────────────────────────────────────
+
+- id: tool-ask-user
+  name: '@deepseek-ai/dsh-tool-ask-user'
+
+# Web search is read-only from the filesystem's point of view and is enabled
+# for dependency-advisory and supply-chain research. `web_fetch` stays off
+# here; a deployment with a configured fetch provider may enable it.
+- id: tool-web
+  name: '@deepseek-ai/dsh-tool-web'
+  config:
+    search: true
+    fetch: false
+    searchTimeoutMs: 60000
