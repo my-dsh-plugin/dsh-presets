@@ -62,6 +62,15 @@ This preset is a reproduction of the community pattern, not a universal claim: t
 | `glob` / `grep` | `dsh-tool-fs-search` | `sampleOverCapGlobResults: false` (over-cap results truncate by mtime, no cross-top-level sampling) |
 | `pwsh` | `dsh-tool-pwsh` | Windows only (`disabled: !!js process.platform !== 'win32'`) |
 
+## Platform notes (Windows)
+
+The persistent PTY bash is linux/darwin-only (`/bin/bash` default), so on Windows:
+
+- the `persistent-shell` group is disabled (`!!js process.platform === 'win32'`), and
+- `bootstrap.mjs` substitutes `pwsh` for `bash` in the bootstrap pair — the first request on Windows exposes `pwsh` + `str_replace_editor` instead of `bash` + `str_replace_editor`.
+
+The anchoring logic is unchanged; only the shell member of the pair differs. Note that `pwsh` is non-persistent (a fresh process per call), unlike the POSIX persistent bash.
+
 ## Install
 
 The target host must run DeepSeek Harness (a version that ships the `@deepseek-ai/dsh-*` preset packages, roughly matching the source machine).

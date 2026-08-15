@@ -1,25 +1,8 @@
 #!/usr/bin/env bash
-# install-anchored-minimal.sh - 锚定极简 agent preset install script (self-contained)
+# install-anchored-minimal.sh - self-contained installer (regenerated: Windows bash->pwsh bootstrap substitution)
 #
-# Installs the "锚定极简" user preset (preset.yml + agent.cordis.yml + the
-# bootstrap.mjs V4-Pro anchoring plugin) into the DSH user preset root. The
-# target instance's roster discovers the preset immediately - no registration
-# or restart needed. Fully self-contained (content embedded), runnable from a
-# remote URL in one line.
-#
-# V4-PRO ANCHORING: DeepSeek V4 Pro conditions strongly on the API-visible
-# first-request tool catalog (community Project2 evidence: Minimal 99/96 vs
-# Standard 91/92; the first-request tool schema is the decisive variable).
-# This preset's bootstrap.mjs keeps the FIRST model request on the official
-# Minimal tool pair (bash + str_replace_editor), then exposes the full
-# anchored-minimal catalog after the first durable tool call or assistant message.
-#
-# ⚠️ KNOWN CONFLICT: the anchor assumes the session STARTS on this preset.
-# Do not switch into or out of it mid-conversation (e.g. via an agent-mode
-# switcher riding agentPreset.select) - mid-session history already contains
-# tool/call or assistant/message events, so the bootstrap phase is skipped and
-# the model sees the full catalog without the Minimal-grounded first-request
-# trajectory, which may degrade capability.
+# Installs the anchored-minimal user preset (preset.yml + agent.cordis.yml + bootstrap.mjs)
+# into the DSH user preset root. The roster discovers it immediately.
 #
 # Usage:
 #   bash install-anchored-minimal.sh             install to ${DSH_HOME:-$HOME/.dsh}/.agent-presets/anchored-minimal
@@ -28,22 +11,12 @@
 #
 # Remote install:
 #   bash -c "$(curl -fsSL https://raw.githubusercontent.com/<owner>/<repo>/<branch>/anchored-minimal/install-anchored-minimal.sh)"
-#   # or
-#   curl -fsSL https://raw.githubusercontent.com/<owner>/<repo>/<branch>/anchored-minimal/install-anchored-minimal.sh | bash
-#
-# Notes:
-#   * The target DSH version must ship the @deepseek-ai/dsh-* packages this
-#     preset references (dsh-tool-fs / dsh-tool-fs-search / dsh-tool-pwsh /
-#     dsh-fs-local / dsh-terminal / dsh-tool-bash-persistent / dsh-persona).
-#   * After install, start a new session and pick "锚定极简", or validate via
-#     standingKeyFor('anchored-minimal').
 
 set -euo pipefail
 
 DSH_HOME="${DSH_HOME:-$HOME/.dsh}"
 TARGET_DIR="$DSH_HOME/.agent-presets/anchored-minimal"
 
-# ---- argument parsing ----
 FORCE=0
 CHECK=0
 for arg in "$@"; do
@@ -129,9 +102,13 @@ cat > "$TARGET_DIR/agent.cordis.yml" <<'AGENT_CORDIS_YML_EOF'
 # The PTY registry is an agent-owned service, so it lives in an entry-local
 # realm. The backend still consumes the host sandbox policy and subprocess
 # implementation, while the tool registers into this agent's scoped catalog.
+# DISABLED ON WINDOWS: the PTY backend and /bin/bash default are
+# linux/darwin-only; on Windows the `tool-pwsh` row provides the shell and the
+# bootstrap pair substitutes `pwsh` for `bash` (see bootstrap.mjs).
 - id: persistent-shell
   name: cordis:group
   group: true
+  disabled: !!js process.platform === 'win32'
   isolate:
     terminals: true
   config:
@@ -309,6 +286,18 @@ export function apply(ctx, config) {
   const suppressedSources = sourceList(source.suppressedContextSources, 'suppressedContextSources', DEFAULT_SUPPRESSED_SOURCES)
 
   /**
+   * Platform-adapted bootstrap pair. On Windows the PTY-backed persistent bash
+   * is unavailable (linux/darwin-only), so `bash` in the configured pair is
+   * substituted with `pwsh` — the Windows shell this preset mounts. The
+   * bootstrap pair therefore stays valid on every platform.
+   */
+  if (typeof process !== 'undefined' && process.platform === 'win32') {
+    for (let index = 0; index < bootstrapTools.length; index += 1) {
+      if (bootstrapTools[index] === 'bash') bootstrapTools[index] = 'pwsh'
+    }
+  }
+
+  /**
    * Per-session promotion state, memoized per process. `0` = unpromoted,
    * `1` = promoted. Derived from durable session events so resume/reload
    * preserve the phase without catch-up machinery.
@@ -408,9 +397,8 @@ ls -la "$TARGET_DIR"
 cat <<'DONE'
 
 Next steps (on the target instance):
-  1. Start a NEW session and pick "锚定极简" (V4-Pro anchored);
-  2. The FIRST request sees the Minimal tool pair (bash + str_replace_editor);
-     after the first tool call or reply the full catalog appears
-     (read/write/edit, glob/grep, pwsh on Windows);
+  1. Start a NEW session and pick the preset;
+  2. First request sees the bootstrap pair (bash + str_replace_editor;
+     pwsh + str_replace_editor on Windows);
   3. Keep the session on this preset - mid-session switching breaks the anchor.
 DONE

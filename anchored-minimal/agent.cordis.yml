@@ -41,9 +41,13 @@
 # The PTY registry is an agent-owned service, so it lives in an entry-local
 # realm. The backend still consumes the host sandbox policy and subprocess
 # implementation, while the tool registers into this agent's scoped catalog.
+# DISABLED ON WINDOWS: the PTY backend and /bin/bash default are
+# linux/darwin-only; on Windows the `tool-pwsh` row provides the shell and the
+# bootstrap pair substitutes `pwsh` for `bash` (see bootstrap.mjs).
 - id: persistent-shell
   name: cordis:group
   group: true
+  disabled: !!js process.platform === 'win32'
   isolate:
     terminals: true
   config:

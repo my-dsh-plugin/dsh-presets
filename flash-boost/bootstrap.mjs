@@ -114,6 +114,18 @@ export function apply(ctx, config) {
   const suppressedSources = sourceList(source.suppressedContextSources, 'suppressedContextSources', DEFAULT_SUPPRESSED_SOURCES)
 
   /**
+   * Platform-adapted bootstrap pair. On Windows the PTY-backed persistent bash
+   * is unavailable (linux/darwin-only), so `bash` in the configured pair is
+   * substituted with `pwsh` — the Windows shell this preset mounts. The
+   * bootstrap pair therefore stays valid on every platform.
+   */
+  if (typeof process !== 'undefined' && process.platform === 'win32') {
+    for (let index = 0; index < bootstrapTools.length; index += 1) {
+      if (bootstrapTools[index] === 'bash') bootstrapTools[index] = 'pwsh'
+    }
+  }
+
+  /**
    * Per-session promotion state, memoized per process. `0` = unpromoted,
    * `1` = promoted. Derived from durable session events so resume/reload
    * preserve the phase without catch-up machinery.

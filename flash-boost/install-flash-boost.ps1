@@ -1,22 +1,7 @@
-﻿# install-flash-boost.ps1 - Flash增强 agent preset install script (PowerShell)
+﻿# install-flash-boost.ps1 - self-contained installer (regenerated: Windows bash->pwsh bootstrap substitution)
 #
-# Installs the "Flash增强" user preset (preset.yml + agent.cordis.yml + the
-# bootstrap.mjs RL-shape anchoring plugin) into the DSH user preset root. The
-# target instance's roster discovers the preset immediately - no registration
-# or restart needed. Fully self-contained (content embedded), runnable from a
-# remote URL in one line.
-#
-# FLASH-TUNED: DeepSeek V4 Flash's trajectory follows the system persona, not
-# the tool catalog (modeltest); the optimal persona is neutral + classify +
-# recall/anti-runaway anchors (router-standard P11/P23: open-task completion
-# 0% -> 100%). bootstrap.mjs keeps the FIRST request on the RL-shape tool pair
-# (bash + str_replace_editor, measured 100% action vs 25% on read/write/edit),
-# then exposes the full catalog after the first durable tool call or message.
-#
-# ⚠️ KNOWN CONFLICT: the bootstrap assumes the session STARTS on this preset.
-# Do not switch into or out of it mid-conversation (e.g. via an agent-mode
-# switcher riding agentPreset.select) - mid-session history already contains
-# tool/call or assistant/message events, so the bootstrap phase is skipped.
+# Installs the flash-boost user preset (preset.yml + agent.cordis.yml + bootstrap.mjs)
+# into the DSH user preset root. The roster discovers it immediately.
 #
 # Usage:
 #   powershell -ExecutionPolicy Bypass -File install-flash-boost.ps1
@@ -101,9 +86,13 @@ $AgentCordisYml = @'
 # The PTY registry is an agent-owned service, so it lives in an entry-local
 # realm. The backend still consumes the host sandbox policy and subprocess
 # implementation, while the tool registers into this agent's scoped catalog.
+# DISABLED ON WINDOWS: the PTY backend and /bin/bash default are
+# linux/darwin-only; on Windows the `tool-pwsh` row provides the shell and the
+# bootstrap pair substitutes `pwsh` for `bash` (see bootstrap.mjs).
 - id: persistent-shell
   name: cordis:group
   group: true
+  disabled: !!js process.platform === 'win32'
   isolate:
     terminals: true
   config:
@@ -282,6 +271,18 @@ export function apply(ctx, config) {
   const suppressedSources = sourceList(source.suppressedContextSources, 'suppressedContextSources', DEFAULT_SUPPRESSED_SOURCES)
 
   /**
+   * Platform-adapted bootstrap pair. On Windows the PTY-backed persistent bash
+   * is unavailable (linux/darwin-only), so `bash` in the configured pair is
+   * substituted with `pwsh` — the Windows shell this preset mounts. The
+   * bootstrap pair therefore stays valid on every platform.
+   */
+  if (typeof process !== 'undefined' && process.platform === 'win32') {
+    for (let index = 0; index < bootstrapTools.length; index += 1) {
+      if (bootstrapTools[index] === 'bash') bootstrapTools[index] = 'pwsh'
+    }
+  }
+
+  /**
    * Per-session promotion state, memoized per process. `0` = unpromoted,
    * `1` = promoted. Derived from durable session events so resume/reload
    * preserve the phase without catch-up machinery.
@@ -419,9 +420,8 @@ Get-ChildItem -Force $TargetDir | Format-Table -AutoSize
 Write-Host @'
 
 Next steps (on the target instance):
-  1. Start a NEW session and pick "Flash增强" (Flash-optimized);
-  2. The FIRST request sees the RL-shape pair (bash + str_replace_editor);
-     after the first tool call or reply the full catalog appears
-     (read/write/edit, glob/grep, pwsh on Windows);
+  1. Start a NEW session and pick the preset;
+  2. First request sees the bootstrap pair (bash + str_replace_editor;
+     pwsh + str_replace_editor on Windows);
   3. Keep the session on this preset - mid-session switching breaks the anchor.
 '@

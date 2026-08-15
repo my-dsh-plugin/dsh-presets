@@ -42,6 +42,15 @@ Flash 的首轮工具面决定**行动 vs 纯推理**：实测（router-standard
 | `glob` / `grep` | `dsh-tool-fs-search` | `sampleOverCapGlobResults: false` |
 | `pwsh` | `dsh-tool-pwsh` | 仅 Windows |
 
+## Windows 平台说明
+
+持久 PTY bash 仅支持 linux/darwin（默认 `/bin/bash`），因此 Windows 上：
+
+- `persistent-shell` 组被禁用（`!!js process.platform === 'win32'`）；
+- `bootstrap.mjs` 会把 RL 形状工具对里的 `bash` 替换为 `pwsh`——Windows 上首个请求暴露的是 `pwsh` + `str_replace_editor`。
+
+RL 形状的"行动 vs 纯推理"效果不变，只有工具对里的 shell 成员不同。注意 `pwsh` 非持久（每次调用新进程），不同于 POSIX 的持久 bash。
+
 ## 安装
 
 目标机需安装 DeepSeek Harness（版本需带 `@deepseek-ai/dsh-*` 预设包）。

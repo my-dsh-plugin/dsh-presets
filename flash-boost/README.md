@@ -42,6 +42,15 @@ On Flash the first-turn tool surface decides **action vs reasoning**: measured (
 | `glob` / `grep` | `dsh-tool-fs-search` | `sampleOverCapGlobResults: false` |
 | `pwsh` | `dsh-tool-pwsh` | Windows only |
 
+## Platform notes (Windows)
+
+The persistent PTY bash is linux/darwin-only (`/bin/bash` default), so on Windows:
+
+- the `persistent-shell` group is disabled (`!!js process.platform === 'win32'`), and
+- `bootstrap.mjs` substitutes `pwsh` for `bash` in the RL-shape pair — the first request on Windows exposes `pwsh` + `str_replace_editor`.
+
+The RL-shape action/reasoning effect is unchanged; only the shell member differs. Note that `pwsh` is non-persistent (a fresh process per call), unlike the POSIX persistent bash.
+
 ## Install
 
 The target host must run DeepSeek Harness (a version that ships the `@deepseek-ai/dsh-*` preset packages).
