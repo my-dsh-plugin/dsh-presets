@@ -1,0 +1,119 @@
+# The `flash-boost` agent preset: a Flash-optimized mode with manual selection.
+#
+# WHY MANUAL SELECTION: automatic task routing (the router-standard approach)
+# classifies the first user message into spec/react at runtime — a black box
+# that can misclassify and adds complexity. Manual mode selection puts the
+# routing decision with the person who actually knows the task: pick this
+# preset when the session is for Flash, keep anchored-minimal/standard for Pro.
+#
+# FLASH-TUNED PERSONA (community-measured): DeepSeek V4 Flash's trajectory
+# follows the system persona, not the tool catalog (modeltest: Flash stays
+# minimal-like even with the full 25-tool catalog). The optimal weak persona
+# is NOT the Minimal one-liner — the spec sentence ANTI-routes on Flash
+# (router-standard P11). Measured optimum (P11/P23): neutral identity +
+# classify-then-act instruction + recall/anti-runaway anchors. The anchors
+# lifted open-task completion from 0% to 100% (P23).
+#
+# RL-SHAPE TOOL BOOTSTRAP: on Flash the first-turn tool surface decides
+# whether the model acts or just reasons. Measured: shell + str_replace_editor
+# (the RL training shape) → 100% tool calls at 18–29K reasoning chars; the
+# read/write/edit surface → ~25% action / 73–101K reasoning. `bootstrap.mjs`
+# keeps the first request on that RL pair, then exposes the full catalog after
+# the first durable tool call or assistant message.
+
+# ── bootstrap (must stay FIRST) ─────────────────────────────────────────────
+#
+# This plugin publishes nothing: it only listens to the `system-prompt/assemble`
+# and `agent/pre-step` waterfalls, so it needs no realm and no inject list.
+- id: tool-bootstrap
+  name: ./bootstrap.mjs
+  config:
+    bootstrapTools: [bash, str_replace_editor]
+    suppressedContextSources: [skill-catalog, agent-instructions]
+
+# ── identity ────────────────────────────────────────────────────────────────
+#
+# The Flash-optimized persona: neutral identity (NOT the Minimal spec sentence,
+# which anti-routes on Flash), classify-then-act, and the recall/anti-runaway
+# anchors. Kept as the complete system prompt (complete: true) so no identity,
+# web-orientation, or tool-guidance section can dilute it.
+- id: persona
+  name: '@deepseek-ai/dsh-persona'
+  config:
+    text: >-
+      You are a helpful assistant.
+      Before acting, decide the task type (build or fix) and adopt the matching
+      style: build → hands-on production; fix → inspect-and-plan.
+      Before acting, briefly review what you have already done in this session and
+      continue from where you left off; do not repeat completed steps.
+      Do not run environment checks (echo, whoami, uname, node --version, date) or
+      exhaustive grep/glob scans.
+      Think deeply first, then produce.
+    complete: true
+    includeRuntimeContext: false
+
+# The PTY registry is an agent-owned service, so it lives in an entry-local
+# realm. The backend still consumes the host sandbox policy and subprocess
+# implementation, while the tool registers into this agent's scoped catalog.
+- id: persistent-shell
+  name: cordis:group
+  group: true
+  isolate:
+    terminals: true
+  config:
+    - id: pty
+      name: '@deepseek-ai/dsh-terminal'
+
+    - id: terminal-bash
+      name: '@deepseek-ai/dsh-terminal-bash'
+      config:
+        timeoutMs: 300000
+
+    - id: persistent-bash
+      name: '@deepseek-ai/dsh-tool-bash-persistent'
+      config:
+        timeoutMs: 300000
+        description: |-
+          Run commands in a bash shell
+          * When invoking this tool, the contents of the "command" parameter does NOT need to be XML-escaped.
+          * You don't have access to the internet via this tool.
+          * You do have access to a mirror of common linux and python packages via apt and pip.
+          * State is persistent across command calls and discussions with the user.
+          * To inspect a particular line range of a file, e.g. lines 10-25, try 'sed -n 10,25p /path/to/the/file'.
+          * Please avoid commands that may produce a very large amount of output.
+          * Please run long lived commands in the background, e.g. 'sleep 10 &' or start a server in the background.
+
+# The bare local filesystem shadows the host's sandboxed provider only for this
+# preset. `tool-fs` (read/write/edit) sits inside the same realm so it shares
+# this exact filesystem with `str_replace_editor`; both require absolute paths.
+- id: filesystem
+  name: cordis:group
+  group: true
+  isolate:
+    fs: true
+  config:
+    - id: fs-local
+      name: '@deepseek-ai/dsh-fs-local'
+      config:
+        cwd: !!js process.env.DSH_CWD ?? process.cwd()
+
+    - id: tool-fs
+      name: '@deepseek-ai/dsh-tool-fs'
+
+    - id: str-replace-editor
+      name: '@deepseek-ai/dsh-tool-str-replace-editor'
+      config:
+        maxOutputChars: 16000
+
+# `glob`/`grep` register into the host `tools` registry and provide nothing,
+# so they need no realm; they resolve the host `subprocess` seam for ripgrep.
+- id: tool-fs-search
+  name: '@deepseek-ai/dsh-tool-fs-search'
+  config:
+    sampleOverCapGlobResults: false
+
+# `pwsh` mirrors `tool-bash` on Windows: it consumes the host `shell` registry
+# and is disabled on non-Windows platforms.
+- id: tool-pwsh
+  name: '@deepseek-ai/dsh-tool-pwsh'
+  disabled: !!js process.platform !== 'win32'

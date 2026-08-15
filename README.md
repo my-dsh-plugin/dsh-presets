@@ -9,6 +9,7 @@ A collection of agent preset modes for [DeepSeek Harness](https://github.com/dee
 | Preset | Tools | Docs |
 |---|---|---|
 | [anchored-minimal](anchored-minimal/README.md) | bash, str_replace_editor, read/write/edit, glob/grep, pwsh (Windows only) — V4-Pro anchored (first request on the Minimal tool pair) | [README](anchored-minimal/README.md) |
+| [flash-boost](flash-boost/README.md) | Flash-optimized: neutral + classify + anti-runaway persona, RL-shape first request — pick manually for V4 Flash sessions | [README](flash-boost/README.md) |
 | [readonly-audit](readonly-audit/README.md) | read-only tool set + audit persona (bash/pwsh, read, glob/grep, str_replace_editor view, web_search) | [README](readonly-audit/README.md) |
 
 ## Layout
@@ -42,6 +43,20 @@ Windows PowerShell:
 
 ```powershell
 irm https://raw.githubusercontent.com/my-dsh-plugin/dsh-presets/main/anchored-minimal/install-anchored-minimal.ps1 | iex
+```
+
+### flash-boost
+
+macOS / Linux:
+
+```bash
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/my-dsh-plugin/dsh-presets/main/flash-boost/install-flash-boost.sh)"
+```
+
+Windows PowerShell:
+
+```powershell
+irm https://raw.githubusercontent.com/my-dsh-plugin/dsh-presets/main/flash-boost/install-flash-boost.ps1 | iex
 ```
 
 ### readonly-audit

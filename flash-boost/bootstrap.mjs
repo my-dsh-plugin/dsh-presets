@@ -1,0 +1,207 @@
+/**
+ * flash-boost RL-shape tool bootstrap
+ *
+ * Keeps the FIRST model request on the RL-shape tool pair (persistent `bash` +
+ * `str_replace_editor`) so DeepSeek V4 Flash ACTS instead of only reasoning.
+ * Community measurement (router-standard v0.2.0, official API, 2026-08-15):
+ * on Flash the first-turn tool surface decides action vs reasoning — shell +
+ * str_replace_editor → 100% tool calls at 18–29K reasoning chars; the
+ * read/write/edit surface → ~25% action / 73–101K reasoning. After the first
+ * durable promotion signal — a `tool/call` OR the first `assistant/message`,
+ * whichever comes first — the full flash-boost catalog is exposed and stays
+ * exposed.
+ *
+ * The phase is derived from durable session events, so resume and reload
+ * preserve it. The persona (`complete: true`) is untouched; this plugin only
+ * narrows the tool catalog and strips auto-injected context during bootstrap.
+ *
+ * Note on the difference from anchored-minimal: that preset anchors on the
+ * Minimal tool pair because V4 Pro's trajectory follows the API-visible
+ * first-request catalog; Flash's trajectory follows the PERSONA instead
+ * (modeltest: Flash stays minimal-like even with the full 25-tool catalog).
+ * flash-boost keeps the RL-shape bootstrap purely for the action/reasoning
+ * trade-off — the persona carries the Flash-specific conditioning.
+ *
+ * ⚠️ KNOWN CONFLICT — mid-session preset switching:
+ * The bootstrap assumption is that a session STARTS on this preset. If the
+ * session is recomposed onto this preset MID-CONVERSATION (for example via
+ * an agent-mode switcher riding `agentPreset.select`), the durable history
+ * already contains `tool/call` / `assistant/message` events, so this plugin
+ * immediately treats the session as promoted and the bootstrap phase is
+ * skipped. Switching AWAY mid-session is equally unsupported.
+ *
+ * Recommendation: pick this preset when CREATING a session and keep it for
+ * the session's lifetime. Do not switch into or out of it mid-conversation.
+ *
+ * Based on the MIT-licensed design of xiaobright/dsh-anchored-standard
+ * (first-request tool-schema anchoring), simplified for flash-boost: one-way
+ * promotion, no discovery-tool resident set, no compaction epoch.
+ *
+ * Robustness:
+ *  - Promotion decisions are memoized per session id for this process; the
+ *    durable event scan runs once per session per process, then O(1).
+ *  - Subagents (delegationDepth > 0) are always promoted (full catalog).
+ *  - A missing bootstrap tool degrades to the full catalog with a one-time
+ *    warning instead of throwing, so composition drift can never brick a
+ *    session.
+ *  - The pre-step context filter degrades to "keep everything" on failure:
+ *    a filter bug must never eat the user's context.
+ *  - Invalid config fails at apply time (preset mount), where it is visible
+ *    and fixable.
+ */
+
+/** Cordis plugin name used by loader diagnostics. */
+export const name = 'flash-boost-tool-bootstrap'
+
+/**
+ * Deliberately NO inject list: the listeners only touch services at event
+ * time. Applying without an inject — combined with this row being FIRST in
+ * agent.cordis.yml — registers the plugin before any context-injecting row,
+ * and waterfall after-next transforms apply in reverse registration order, so
+ * the first-request strip below is the LAST transform. The pre-step listener
+ * additionally registers with `prepend: true` so the strip stays the outermost
+ * transform even against host-plane listeners and future row reordering.
+ */
+export const inject = []
+
+/** Durable session event types that count as a promotion signal. */
+const PROMOTE_EVENTS = new Set(['tool/call', 'assistant/message'])
+
+/** Every config key this plugin accepts — anything else is a typo. */
+const ALLOWED_KEYS = new Set(['bootstrapTools', 'suppressedContextSources'])
+
+/**
+ * Context sources stripped from the first request by default. Both are
+ * automatic `agent/pre-step` injections: the available-skills reminder
+ * (`skill-catalog`) and the AGENTS.md/CLAUDE.md workspace digest
+ * (`agent-instructions`). True Minimal mounts neither plugin.
+ */
+const DEFAULT_SUPPRESSED_SOURCES = ['skill-catalog', 'agent-instructions']
+
+/**
+ * The default first-request catalog: the RL-shape tool pair — the persistent
+ * `bash` shell and `str_replace_editor` (measured 100% action at 18–29K
+ * reasoning chars on Flash, vs ~25% action on the read/write/edit surface).
+ */
+const DEFAULT_BOOTSTRAP_TOOLS = ['bash', 'str_replace_editor']
+
+function stringList(value, field) {
+  if (!Array.isArray(value) || value.length === 0 || value.some((item) => typeof item !== 'string' || item.length === 0)) {
+    throw new TypeError(`${name}: ${field} must be a non-empty array of non-empty strings`)
+  }
+  return [...new Set(value)]
+}
+
+function sourceList(value, field, fallback) {
+  if (value === undefined) return new Set(fallback)
+  if (!Array.isArray(value) || value.some((item) => typeof item !== 'string' || item.length === 0)) {
+    throw new TypeError(`${name}: ${field} must be an array of non-empty strings`)
+  }
+  return new Set(value)
+}
+
+/** Register the per-session bootstrap filter. */
+export function apply(ctx, config) {
+  const source = config === undefined ? {} : config
+  if (typeof source !== 'object' || source === null || Array.isArray(source)) {
+    throw new TypeError(`${name}: config must be an object`)
+  }
+  const unknown = Object.keys(source).filter((key) => !ALLOWED_KEYS.has(key))
+  if (unknown.length > 0) {
+    throw new TypeError(`${name}: unknown config key(s) ${unknown.join(', ')} — allowed keys: ${[...ALLOWED_KEYS].sort().join(', ')}`)
+  }
+  const bootstrapTools = stringList(source.bootstrapTools, 'bootstrapTools')
+  const suppressedSources = sourceList(source.suppressedContextSources, 'suppressedContextSources', DEFAULT_SUPPRESSED_SOURCES)
+
+  /**
+   * Per-session promotion state, memoized per process. `0` = unpromoted,
+   * `1` = promoted. Derived from durable session events so resume/reload
+   * preserve the phase without catch-up machinery.
+   */
+  const promotedFor = new Map()
+  const isPromoted = (session) => {
+    if (session === undefined) return true
+    const cached = promotedFor.get(session.id)
+    if (cached !== undefined) return cached
+    let promoted = false
+    if (Array.isArray(session.events)) {
+      for (const event of session.events) {
+        if (PROMOTE_EVENTS.has(event.type)) {
+          promoted = true
+          break
+        }
+      }
+    }
+    promotedFor.set(session.id, promoted)
+    return promoted
+  }
+
+  let warned = false
+  const warnOnce = (message) => {
+    if (warned) return
+    warned = true
+    try {
+      ctx.logger.warn(message)
+    } catch {
+      // Logger unavailable — the guard exists only to avoid spamming.
+    }
+  }
+
+  /**
+   * Narrow the assembled catalog to the bootstrap pair. When a bootstrap tool
+   * is missing from the assembled catalog, degrade to the full catalog with a
+   * one-time warning instead of throwing.
+   */
+  const keepBootstrapTools = (assembled) => {
+    const available = new Set(assembled.tools.map((tool) => tool.name))
+    const missing = bootstrapTools.filter((toolName) => !available.has(toolName))
+    if (missing.length > 0) {
+      warnOnce(
+        `${name}: expected bootstrap tools ${JSON.stringify(missing)} are missing from the assembled catalog — `
+        + 'bootstrap disabled, full catalog exposed',
+      )
+      return assembled
+    }
+    return {
+      ...assembled,
+      tools: assembled.tools.filter((tool) => bootstrapTools.includes(tool.name)),
+    }
+  }
+
+  ctx.on('system-prompt/assemble', async (_assembly, context, next) => {
+    // Downstream errors propagate untouched; only this filter's own logic is guarded.
+    const assembled = await next()
+    try {
+      if (isPromoted(context.agent?.session)) return assembled
+      return keepBootstrapTools(assembled)
+    } catch (error) {
+      // A filter bug must never brick a session: degrade to the full catalog.
+      warnOnce(`${name}: bootstrap filter failed, exposing the full catalog: ${String((error && error.message) || error)}`)
+      return assembled
+    }
+  })
+
+  // Strip first-step injected reminders (skill catalog, AGENTS.md) during
+  // bootstrap. Because this listener is the first registered (see the inject
+  // note, the row order in agent.cordis.yml, and `prepend` below), the strip
+  // is the final waterfall transform and actually removes what later
+  // listeners inject.
+  ctx.on('agent/pre-step', async ({ agent }, next) => {
+    // Downstream errors propagate untouched; only this filter's own logic is guarded.
+    const decision = await next()
+    if (decision.kind === 'reject') return decision
+    try {
+      if (isPromoted(agent?.session) || suppressedSources.size === 0) return decision
+      if (!Array.isArray(decision.messages)) return decision
+      const kept = decision.messages.filter((message) => {
+        const kind = message?.source?.kind
+        return typeof kind !== 'string' || !suppressedSources.has(kind)
+      })
+      return kept.length === decision.messages.length ? decision : { ...decision, messages: kept }
+    } catch (error) {
+      // A filter bug must never eat context: degrade to keeping every message.
+      warnOnce(`${name}: pre-step context filter failed, keeping injected context: ${String((error && error.message) || error)}`)
+      return decision
+    }
+  }, { prepend: true })
+}

@@ -9,6 +9,7 @@
 | 预设 | 工具集 | 详细文档 |
 |---|---|---|
 | [锚定极简 / anchored-minimal](anchored-minimal/README.zh.md) | bash、str_replace_editor、read/write/edit、glob/grep、pwsh（仅 Windows）—— V4 Pro 锚定（首请求极简工具对） | [README](anchored-minimal/README.zh.md) |
+| [Flash增强 / flash-boost](flash-boost/README.zh.md) | Flash 专用：中性 persona + 分类执行 + 防跑题锚，首轮 RL 形状工具对——V4 Flash 会话手动选择 | [README](flash-boost/README.zh.md) |
 | [只读安全审计 / readonly-audit](readonly-audit/README.zh.md) | 只读工具集 + 审计 persona（bash/pwsh、read、glob/grep、str_replace_editor view、web_search） | [README](readonly-audit/README.zh.md) |
 
 ## 目录结构
@@ -42,6 +43,20 @@ Windows PowerShell:
 
 ```powershell
 irm https://raw.githubusercontent.com/my-dsh-plugin/dsh-presets/main/anchored-minimal/install-anchored-minimal.ps1 | iex
+```
+
+### Flash增强 / flash-boost
+
+macOS / Linux:
+
+```bash
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/my-dsh-plugin/dsh-presets/main/flash-boost/install-flash-boost.sh)"
+```
+
+Windows PowerShell:
+
+```powershell
+irm https://raw.githubusercontent.com/my-dsh-plugin/dsh-presets/main/flash-boost/install-flash-boost.ps1 | iex
 ```
 
 ### 只读安全审计 / readonly-audit

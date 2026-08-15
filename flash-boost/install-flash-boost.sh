@@ -1,0 +1,429 @@
+#!/usr/bin/env bash
+# install-flash-boost.sh - Flash增强 agent preset install script (self-contained)
+#
+# Installs the "Flash增强" user preset (preset.yml + agent.cordis.yml + the
+# bootstrap.mjs RL-shape anchoring plugin) into the DSH user preset root. The
+# target instance's roster discovers the preset immediately - no registration
+# or restart needed. Fully self-contained (content embedded), runnable from a
+# remote URL in one line.
+#
+# FLASH-TUNED: DeepSeek V4 Flash's trajectory follows the system persona, not
+# the tool catalog (modeltest); the optimal persona is neutral + classify +
+# recall/anti-runaway anchors (router-standard P11/P23: open-task completion
+# 0% -> 100%). bootstrap.mjs keeps the FIRST request on the RL-shape tool pair
+# (bash + str_replace_editor, measured 100% action vs 25% on read/write/edit),
+# then exposes the full catalog after the first durable tool call or message.
+#
+# ⚠️ KNOWN CONFLICT: the bootstrap assumes the session STARTS on this preset.
+# Do not switch into or out of it mid-conversation (e.g. via an agent-mode
+# switcher riding agentPreset.select) - mid-session history already contains
+# tool/call or assistant/message events, so the bootstrap phase is skipped.
+#
+# Usage:
+#   bash install-flash-boost.sh             install to ${DSH_HOME:-$HOME/.dsh}/.agent-presets/flash-boost
+#   bash install-flash-boost.sh --force     overwrite existing install (backs up first)
+#   bash install-flash-boost.sh --check     print target path and status, write nothing
+#
+# Remote install:
+#   bash -c "$(curl -fsSL https://raw.githubusercontent.com/<owner>/<repo>/<branch>/flash-boost/install-flash-boost.sh)"
+#   # or
+#   curl -fsSL https://raw.githubusercontent.com/<owner>/<repo>/<branch>/flash-boost/install-flash-boost.sh | bash
+#
+# Notes:
+#   * The target DSH version must ship the @deepseek-ai/dsh-* packages this
+#     preset references (dsh-tool-fs / dsh-tool-fs-search / dsh-tool-pwsh /
+#     dsh-fs-local / dsh-terminal / dsh-tool-bash-persistent / dsh-persona).
+#   * After install, start a new session and pick "Flash增强", or validate via
+#     standingKeyFor('flash-boost').
+
+set -euo pipefail
+
+DSH_HOME="${DSH_HOME:-$HOME/.dsh}"
+TARGET_DIR="$DSH_HOME/.agent-presets/flash-boost"
+
+# ---- argument parsing ----
+FORCE=0
+CHECK=0
+for arg in "$@"; do
+  case "$arg" in
+    --force) FORCE=1 ;;
+    --check) CHECK=1 ;;
+    *) echo "unknown argument: $arg" >&2; exit 2 ;;
+  esac
+done
+
+echo "DSH_HOME:   $DSH_HOME"
+echo "Target dir: $TARGET_DIR"
+
+if [ "$CHECK" -eq 1 ]; then
+  if [ -e "$TARGET_DIR/agent.cordis.yml" ]; then
+    echo "status: already installed (use --force to overwrite)"
+    ls -la "$TARGET_DIR"
+  else
+    echo "status: not installed"
+  fi
+  exit 0
+fi
+
+if [ -e "$TARGET_DIR/agent.cordis.yml" ]; then
+  if [ "$FORCE" -ne 1 ]; then
+    echo "error: $TARGET_DIR already exists (use --force to overwrite)" >&2
+    exit 1
+  fi
+  BACKUP="$TARGET_DIR.bak-$(date +%Y%m%d%H%M%S)"
+  mv "$TARGET_DIR" "$BACKUP"
+  echo "backed up existing install to $BACKUP"
+fi
+
+mkdir -p "$TARGET_DIR"
+umask 077
+
+cat > "$TARGET_DIR/preset.yml" <<'PRESET_YML_EOF'
+name: Flash增强
+description: Flash 专用模式：中性 persona + 分类执行指令 + 防跑题锚（实测最优）；首轮 RL 形状工具对、之后完整工具集。
+PRESET_YML_EOF
+
+cat > "$TARGET_DIR/agent.cordis.yml" <<'AGENT_CORDIS_YML_EOF'
+# The `flash-boost` agent preset: a Flash-optimized mode with manual selection.
+#
+# WHY MANUAL SELECTION: automatic task routing (the router-standard approach)
+# classifies the first user message into spec/react at runtime — a black box
+# that can misclassify and adds complexity. Manual mode selection puts the
+# routing decision with the person who actually knows the task: pick this
+# preset when the session is for Flash, keep anchored-minimal/standard for Pro.
+#
+# FLASH-TUNED PERSONA (community-measured): DeepSeek V4 Flash's trajectory
+# follows the system persona, not the tool catalog (modeltest: Flash stays
+# minimal-like even with the full 25-tool catalog). The optimal weak persona
+# is NOT the Minimal one-liner — the spec sentence ANTI-routes on Flash
+# (router-standard P11). Measured optimum (P11/P23): neutral identity +
+# classify-then-act instruction + recall/anti-runaway anchors. The anchors
+# lifted open-task completion from 0% to 100% (P23).
+#
+# RL-SHAPE TOOL BOOTSTRAP: on Flash the first-turn tool surface decides
+# whether the model acts or just reasons. Measured: shell + str_replace_editor
+# (the RL training shape) → 100% tool calls at 18–29K reasoning chars; the
+# read/write/edit surface → ~25% action / 73–101K reasoning. `bootstrap.mjs`
+# keeps the first request on that RL pair, then exposes the full catalog after
+# the first durable tool call or assistant message.
+
+# ── bootstrap (must stay FIRST) ─────────────────────────────────────────────
+#
+# This plugin publishes nothing: it only listens to the `system-prompt/assemble`
+# and `agent/pre-step` waterfalls, so it needs no realm and no inject list.
+- id: tool-bootstrap
+  name: ./bootstrap.mjs
+  config:
+    bootstrapTools: [bash, str_replace_editor]
+    suppressedContextSources: [skill-catalog, agent-instructions]
+
+# ── identity ────────────────────────────────────────────────────────────────
+#
+# The Flash-optimized persona: neutral identity (NOT the Minimal spec sentence,
+# which anti-routes on Flash), classify-then-act, and the recall/anti-runaway
+# anchors. Kept as the complete system prompt (complete: true) so no identity,
+# web-orientation, or tool-guidance section can dilute it.
+- id: persona
+  name: '@deepseek-ai/dsh-persona'
+  config:
+    text: >-
+      You are a helpful assistant.
+      Before acting, decide the task type (build or fix) and adopt the matching
+      style: build → hands-on production; fix → inspect-and-plan.
+      Before acting, briefly review what you have already done in this session and
+      continue from where you left off; do not repeat completed steps.
+      Do not run environment checks (echo, whoami, uname, node --version, date) or
+      exhaustive grep/glob scans.
+      Think deeply first, then produce.
+    complete: true
+    includeRuntimeContext: false
+
+# The PTY registry is an agent-owned service, so it lives in an entry-local
+# realm. The backend still consumes the host sandbox policy and subprocess
+# implementation, while the tool registers into this agent's scoped catalog.
+- id: persistent-shell
+  name: cordis:group
+  group: true
+  isolate:
+    terminals: true
+  config:
+    - id: pty
+      name: '@deepseek-ai/dsh-terminal'
+
+    - id: terminal-bash
+      name: '@deepseek-ai/dsh-terminal-bash'
+      config:
+        timeoutMs: 300000
+
+    - id: persistent-bash
+      name: '@deepseek-ai/dsh-tool-bash-persistent'
+      config:
+        timeoutMs: 300000
+        description: |-
+          Run commands in a bash shell
+          * When invoking this tool, the contents of the "command" parameter does NOT need to be XML-escaped.
+          * You don't have access to the internet via this tool.
+          * You do have access to a mirror of common linux and python packages via apt and pip.
+          * State is persistent across command calls and discussions with the user.
+          * To inspect a particular line range of a file, e.g. lines 10-25, try 'sed -n 10,25p /path/to/the/file'.
+          * Please avoid commands that may produce a very large amount of output.
+          * Please run long lived commands in the background, e.g. 'sleep 10 &' or start a server in the background.
+
+# The bare local filesystem shadows the host's sandboxed provider only for this
+# preset. `tool-fs` (read/write/edit) sits inside the same realm so it shares
+# this exact filesystem with `str_replace_editor`; both require absolute paths.
+- id: filesystem
+  name: cordis:group
+  group: true
+  isolate:
+    fs: true
+  config:
+    - id: fs-local
+      name: '@deepseek-ai/dsh-fs-local'
+      config:
+        cwd: !!js process.env.DSH_CWD ?? process.cwd()
+
+    - id: tool-fs
+      name: '@deepseek-ai/dsh-tool-fs'
+
+    - id: str-replace-editor
+      name: '@deepseek-ai/dsh-tool-str-replace-editor'
+      config:
+        maxOutputChars: 16000
+
+# `glob`/`grep` register into the host `tools` registry and provide nothing,
+# so they need no realm; they resolve the host `subprocess` seam for ripgrep.
+- id: tool-fs-search
+  name: '@deepseek-ai/dsh-tool-fs-search'
+  config:
+    sampleOverCapGlobResults: false
+
+# `pwsh` mirrors `tool-bash` on Windows: it consumes the host `shell` registry
+# and is disabled on non-Windows platforms.
+- id: tool-pwsh
+  name: '@deepseek-ai/dsh-tool-pwsh'
+  disabled: !!js process.platform !== 'win32'
+AGENT_CORDIS_YML_EOF
+
+cat > "$TARGET_DIR/bootstrap.mjs" <<'BOOTSTRAP_MJS_EOF'
+/**
+ * flash-boost RL-shape tool bootstrap
+ *
+ * Keeps the FIRST model request on the RL-shape tool pair (persistent `bash` +
+ * `str_replace_editor`) so DeepSeek V4 Flash ACTS instead of only reasoning.
+ * Community measurement (router-standard v0.2.0, official API, 2026-08-15):
+ * on Flash the first-turn tool surface decides action vs reasoning — shell +
+ * str_replace_editor → 100% tool calls at 18–29K reasoning chars; the
+ * read/write/edit surface → ~25% action / 73–101K reasoning. After the first
+ * durable promotion signal — a `tool/call` OR the first `assistant/message`,
+ * whichever comes first — the full flash-boost catalog is exposed and stays
+ * exposed.
+ *
+ * The phase is derived from durable session events, so resume and reload
+ * preserve it. The persona (`complete: true`) is untouched; this plugin only
+ * narrows the tool catalog and strips auto-injected context during bootstrap.
+ *
+ * Note on the difference from anchored-minimal: that preset anchors on the
+ * Minimal tool pair because V4 Pro's trajectory follows the API-visible
+ * first-request catalog; Flash's trajectory follows the PERSONA instead
+ * (modeltest: Flash stays minimal-like even with the full 25-tool catalog).
+ * flash-boost keeps the RL-shape bootstrap purely for the action/reasoning
+ * trade-off — the persona carries the Flash-specific conditioning.
+ *
+ * ⚠️ KNOWN CONFLICT — mid-session preset switching:
+ * The bootstrap assumption is that a session STARTS on this preset. If the
+ * session is recomposed onto this preset MID-CONVERSATION (for example via
+ * an agent-mode switcher riding `agentPreset.select`), the durable history
+ * already contains `tool/call` / `assistant/message` events, so this plugin
+ * immediately treats the session as promoted and the bootstrap phase is
+ * skipped. Switching AWAY mid-session is equally unsupported.
+ *
+ * Recommendation: pick this preset when CREATING a session and keep it for
+ * the session's lifetime. Do not switch into or out of it mid-conversation.
+ *
+ * Based on the MIT-licensed design of xiaobright/dsh-anchored-standard
+ * (first-request tool-schema anchoring), simplified for flash-boost: one-way
+ * promotion, no discovery-tool resident set, no compaction epoch.
+ *
+ * Robustness:
+ *  - Promotion decisions are memoized per session id for this process; the
+ *    durable event scan runs once per session per process, then O(1).
+ *  - Subagents (delegationDepth > 0) are always promoted (full catalog).
+ *  - A missing bootstrap tool degrades to the full catalog with a one-time
+ *    warning instead of throwing, so composition drift can never brick a
+ *    session.
+ *  - The pre-step context filter degrades to "keep everything" on failure:
+ *    a filter bug must never eat the user's context.
+ *  - Invalid config fails at apply time (preset mount), where it is visible
+ *    and fixable.
+ */
+
+/** Cordis plugin name used by loader diagnostics. */
+export const name = 'flash-boost-tool-bootstrap'
+
+/**
+ * Deliberately NO inject list: the listeners only touch services at event
+ * time. Applying without an inject — combined with this row being FIRST in
+ * agent.cordis.yml — registers the plugin before any context-injecting row,
+ * and waterfall after-next transforms apply in reverse registration order, so
+ * the first-request strip below is the LAST transform. The pre-step listener
+ * additionally registers with `prepend: true` so the strip stays the outermost
+ * transform even against host-plane listeners and future row reordering.
+ */
+export const inject = []
+
+/** Durable session event types that count as a promotion signal. */
+const PROMOTE_EVENTS = new Set(['tool/call', 'assistant/message'])
+
+/** Every config key this plugin accepts — anything else is a typo. */
+const ALLOWED_KEYS = new Set(['bootstrapTools', 'suppressedContextSources'])
+
+/**
+ * Context sources stripped from the first request by default. Both are
+ * automatic `agent/pre-step` injections: the available-skills reminder
+ * (`skill-catalog`) and the AGENTS.md/CLAUDE.md workspace digest
+ * (`agent-instructions`). True Minimal mounts neither plugin.
+ */
+const DEFAULT_SUPPRESSED_SOURCES = ['skill-catalog', 'agent-instructions']
+
+/**
+ * The default first-request catalog: the RL-shape tool pair — the persistent
+ * `bash` shell and `str_replace_editor` (measured 100% action at 18–29K
+ * reasoning chars on Flash, vs ~25% action on the read/write/edit surface).
+ */
+const DEFAULT_BOOTSTRAP_TOOLS = ['bash', 'str_replace_editor']
+
+function stringList(value, field) {
+  if (!Array.isArray(value) || value.length === 0 || value.some((item) => typeof item !== 'string' || item.length === 0)) {
+    throw new TypeError(`${name}: ${field} must be a non-empty array of non-empty strings`)
+  }
+  return [...new Set(value)]
+}
+
+function sourceList(value, field, fallback) {
+  if (value === undefined) return new Set(fallback)
+  if (!Array.isArray(value) || value.some((item) => typeof item !== 'string' || item.length === 0)) {
+    throw new TypeError(`${name}: ${field} must be an array of non-empty strings`)
+  }
+  return new Set(value)
+}
+
+/** Register the per-session bootstrap filter. */
+export function apply(ctx, config) {
+  const source = config === undefined ? {} : config
+  if (typeof source !== 'object' || source === null || Array.isArray(source)) {
+    throw new TypeError(`${name}: config must be an object`)
+  }
+  const unknown = Object.keys(source).filter((key) => !ALLOWED_KEYS.has(key))
+  if (unknown.length > 0) {
+    throw new TypeError(`${name}: unknown config key(s) ${unknown.join(', ')} — allowed keys: ${[...ALLOWED_KEYS].sort().join(', ')}`)
+  }
+  const bootstrapTools = stringList(source.bootstrapTools, 'bootstrapTools')
+  const suppressedSources = sourceList(source.suppressedContextSources, 'suppressedContextSources', DEFAULT_SUPPRESSED_SOURCES)
+
+  /**
+   * Per-session promotion state, memoized per process. `0` = unpromoted,
+   * `1` = promoted. Derived from durable session events so resume/reload
+   * preserve the phase without catch-up machinery.
+   */
+  const promotedFor = new Map()
+  const isPromoted = (session) => {
+    if (session === undefined) return true
+    const cached = promotedFor.get(session.id)
+    if (cached !== undefined) return cached
+    let promoted = false
+    if (Array.isArray(session.events)) {
+      for (const event of session.events) {
+        if (PROMOTE_EVENTS.has(event.type)) {
+          promoted = true
+          break
+        }
+      }
+    }
+    promotedFor.set(session.id, promoted)
+    return promoted
+  }
+
+  let warned = false
+  const warnOnce = (message) => {
+    if (warned) return
+    warned = true
+    try {
+      ctx.logger.warn(message)
+    } catch {
+      // Logger unavailable — the guard exists only to avoid spamming.
+    }
+  }
+
+  /**
+   * Narrow the assembled catalog to the bootstrap pair. When a bootstrap tool
+   * is missing from the assembled catalog, degrade to the full catalog with a
+   * one-time warning instead of throwing.
+   */
+  const keepBootstrapTools = (assembled) => {
+    const available = new Set(assembled.tools.map((tool) => tool.name))
+    const missing = bootstrapTools.filter((toolName) => !available.has(toolName))
+    if (missing.length > 0) {
+      warnOnce(
+        `${name}: expected bootstrap tools ${JSON.stringify(missing)} are missing from the assembled catalog — `
+        + 'bootstrap disabled, full catalog exposed',
+      )
+      return assembled
+    }
+    return {
+      ...assembled,
+      tools: assembled.tools.filter((tool) => bootstrapTools.includes(tool.name)),
+    }
+  }
+
+  ctx.on('system-prompt/assemble', async (_assembly, context, next) => {
+    // Downstream errors propagate untouched; only this filter's own logic is guarded.
+    const assembled = await next()
+    try {
+      if (isPromoted(context.agent?.session)) return assembled
+      return keepBootstrapTools(assembled)
+    } catch (error) {
+      // A filter bug must never brick a session: degrade to the full catalog.
+      warnOnce(`${name}: bootstrap filter failed, exposing the full catalog: ${String((error && error.message) || error)}`)
+      return assembled
+    }
+  })
+
+  // Strip first-step injected reminders (skill catalog, AGENTS.md) during
+  // bootstrap. Because this listener is the first registered (see the inject
+  // note, the row order in agent.cordis.yml, and `prepend` below), the strip
+  // is the final waterfall transform and actually removes what later
+  // listeners inject.
+  ctx.on('agent/pre-step', async ({ agent }, next) => {
+    // Downstream errors propagate untouched; only this filter's own logic is guarded.
+    const decision = await next()
+    if (decision.kind === 'reject') return decision
+    try {
+      if (isPromoted(agent?.session) || suppressedSources.size === 0) return decision
+      if (!Array.isArray(decision.messages)) return decision
+      const kept = decision.messages.filter((message) => {
+        const kind = message?.source?.kind
+        return typeof kind !== 'string' || !suppressedSources.has(kind)
+      })
+      return kept.length === decision.messages.length ? decision : { ...decision, messages: kept }
+    } catch (error) {
+      // A filter bug must never eat context: degrade to keeping every message.
+      warnOnce(`${name}: pre-step context filter failed, keeping injected context: ${String((error && error.message) || error)}`)
+      return decision
+    }
+  }, { prepend: true })
+}
+BOOTSTRAP_MJS_EOF
+
+echo "installed:"
+ls -la "$TARGET_DIR"
+
+cat <<'DONE'
+
+Next steps (on the target instance):
+  1. Start a NEW session and pick "Flash增强" (Flash-optimized);
+  2. The FIRST request sees the RL-shape pair (bash + str_replace_editor);
+     after the first tool call or reply the full catalog appears
+     (read/write/edit, glob/grep, pwsh on Windows);
+  3. Keep the session on this preset - mid-session switching breaks the anchor.
+DONE
